@@ -9,6 +9,7 @@ import type { Catalog } from '../catalog/types.js';
 import { deriveTripState } from '../machines/trip-state.js';
 import { HANDLERS } from './handlers/index.js';
 import { reject, type Outcome } from './handlers/context.js';
+import { isInstructionVisible } from './instructions.js';
 import { isFulfilled, measure } from './requirements.js';
 import { createRun, currentStage, findStage, type StageRun, type TripRun } from './run.js';
 import type { EventInput, EventResult, StageResult, TripInput, TripResult } from './types.js';
@@ -91,6 +92,15 @@ function stageResult(stage: StageRun): StageResult {
         waived: r.waived,
         violated: r.violated,
         notApplicable: r.notApplicable === true,
+      };
+    }),
+    instructions: (stage.input.instructions ?? []).map((i) => {
+      const ack = stage.requirements.find((r) => r.spec.instructionId === i.id);
+      return {
+        id: i.id,
+        revision: i.revision,
+        visible: isInstructionVisible(i.showAt, stage.phase),
+        ...(ack ? { acknowledged: isFulfilled(measure(stage, ack.spec)) } : {}),
       };
     }),
   };

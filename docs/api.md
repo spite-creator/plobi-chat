@@ -69,7 +69,10 @@ POST /api/v1/trips
   "stages": [
     {
       "type": "loading",
-      "address": "Москва, ул. Складская, 1",
+      "place": { "external_id": "WH-NORTH" },
+      "instructions": [
+        { "kind": "text", "text": "Сегодня Ашота нет, звони Вове", "show_at": "arrived" }
+      ],
       "lat": 55.75, "lon": 37.61, "timezone": "Europe/Moscow",
       "window_from": "2026-11-20T06:00:00Z", "window_to": "2026-11-20T09:00:00Z",
       "requirements": [
@@ -100,6 +103,21 @@ POST   /events/batch                   # пакетная отправка оф�
 возвращает `409` с объяснением. Событие из офлайн-очереди (`/events/batch`)
 встаёт на своё место по `occurred_at`, а если не вписывается в автомат,
 сохраняется со статусом `conflict`.
+
+### Места
+```
+GET    /places?query=
+POST   /places
+PUT    /places/by-external-id/{ext}
+PATCH  /places/{id}                    # контакты, часы работы, постоянные инструкции
+```
+
+### Инструкции этапа
+```
+GET    /stages/{id}/instructions
+POST   /stages/{id}/instructions       # разовая инструкция
+PATCH  /stage-instructions/{id}        # изменение: растёт revision, водитель получает уведомление
+```
 
 ### Требования этапа
 ```

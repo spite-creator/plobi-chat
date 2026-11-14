@@ -18,6 +18,12 @@ export * from './engine/types.js';
 export { evaluateTrip, orderEvents } from './engine/evaluate.js';
 export { availableEvents, type AvailableEvent, type AvailableQuery } from './engine/available.js';
 export { materializeRequirements } from './engine/requirements.js';
+export {
+  ACKNOWLEDGE_EVENT,
+  acknowledgementRequirements,
+  isInstructionVisible,
+  materializeInstructions,
+} from './engine/instructions.js';
 export { insertTransits, defaultTransitRule, type TransitRule } from './engine/route.js';
 export { missingFields } from './engine/fields.js';
 export { checkScope, type ScopeLabel } from './engine/scope.js';

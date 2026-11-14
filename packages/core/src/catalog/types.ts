@@ -110,6 +110,7 @@ export const REQUIREMENT_KINDS = [
   'text',
   'checklist',
   'event',
+  'acknowledgement',
 ] as const;
 export type RequirementKind = (typeof REQUIREMENT_KINDS)[number];
 
@@ -126,6 +127,9 @@ export interface RequirementSpec {
   readonly eventType?: string;
   /** kind = scan | number | text | checklist: the event value key that holds it. */
   readonly valueKey?: string;
+  /** kind = acknowledgement: the instruction and the revision that must be acknowledged. */
+  readonly instructionId?: string;
+  readonly instructionRevision?: number;
   readonly strictness: 'block' | 'warn';
   readonly waivable: boolean;
   readonly instructions?: LocalizedText;
@@ -142,10 +146,44 @@ export interface RequirementRule {
   readonly tagsRequired?: readonly string[];
 }
 
+export const INSTRUCTION_KINDS = ['text', 'contact', 'photo', 'location', 'file', 'voice', 'link'] as const;
+export type InstructionKind = (typeof INSTRUCTION_KINDS)[number];
+
+/** When the app shows an instruction: from assignment, or from reaching a phase. */
+export type InstructionShowAt = 'always' | 'arrived' | 'started' | 'completed';
+
+/** What the driver must know (a requirement is what the driver must do). */
+export interface InstructionContent {
+  readonly kind: InstructionKind;
+  readonly text?: LocalizedText | string;
+  readonly contact?: { readonly name: string; readonly phone: string; readonly role?: string };
+  readonly location?: { readonly lat: number; readonly lon: number };
+  readonly attachmentId?: string;
+  readonly url?: string;
+  readonly showAt: InstructionShowAt;
+  /** Requires "Acknowledged" before this phase. */
+  readonly ackBeforePhase?: Phase;
+}
+
+export interface InstructionRule {
+  readonly code: string;
+  readonly stageTypes?: readonly string[];
+  readonly tagsRequired?: readonly string[];
+  readonly instruction: InstructionContent;
+}
+
+/** A place a stage refers to: warehouse, customer, customs post, port. */
+export interface Place {
+  readonly id: string;
+  readonly name: string;
+  readonly instructions?: ReadonlyArray<InstructionContent & { readonly id: string }>;
+}
+
 export interface Catalog {
   readonly stageTypes: Readonly<Record<string, StageType>>;
   readonly eventTypes: Readonly<Record<string, EventType>>;
   readonly incidentTypes: Readonly<Record<string, IncidentType>>;
   readonly requirementTemplates: Readonly<Record<string, RequirementTemplate>>;
   readonly requirementRules: readonly RequirementRule[];
+  readonly instructionRules: readonly InstructionRule[];
 }

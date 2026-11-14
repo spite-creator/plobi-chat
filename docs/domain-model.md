@@ -21,6 +21,10 @@ User
 - **driver** — видит свои рейсы, выставляет события, общается в чатах.
 - **observer** — только чтение (например, клиент-грузовладелец или менеджер).
 
+Сейчас прорабатываются две основные роли: **водитель** и **диспетчер**.
+Позже появятся роли медика и механика (для будущего модуля путевых листов),
+их права пока не определены.
+
 ## Справочники (настраиваются компанией)
 
 Подробно механика описана в [state-machine.md](state-machine.md).
@@ -119,13 +123,14 @@ Stage                                           # этап: точка или т
   tags[]                                        # дополняют теги рейса
   is_auto: bool                                 # транзит вставлен сервером автоматически
   # для point:
-  address, lat, lon, timezone
+  place_id?                                     # ссылка на справочник мест
+  address, lat, lon, timezone                   # из места или разово
   window_from, window_to                        # окно прибытия
   contact { name, phone }
   # для transit:
   planned_distance_km?, carrier_ref?            # например, судно и рейс парома
   eta?                                          # последнее ETA из событий
-  instructions: text
+  instructions[]                                # StageInstruction, см. ниже
   custom_fields: JSONB
 
 Incident                                        # параллельный инцидент
@@ -174,6 +179,31 @@ Event
 
 События не редактируются и не удаляются: это журнал. Ошибочное событие
 отменяется новым событием `cancelled_event` со ссылкой на исходное.
+
+## Места и инструкции
+
+Подробно: [places-and-instructions.md](places-and-instructions.md).
+
+```
+Place
+  id, external_id, name, kind?
+  address, lat, lon, timezone, working_hours?
+  contacts[] { name, phone, role }
+  instructions[]                # постоянные, копируются в каждый этап на это место
+  tags[]
+
+InstructionRule                 # инструкции по типу этапа и тегам (справочник)
+  stage_types[], tags_required[], instruction
+
+StageInstruction                # инструкция на конкретном этапе
+  id
+  kind: text | contact | photo | location | file | voice | link
+  text?, contact?, lat?, lon?, attachment_id?, url?
+  show_at: always | arrived | started | completed
+  ack_before_phase?             # включает требование «ознакомлен»
+  revision                      # растёт при каждом изменении
+  source: place | instruction_rule | manual
+```
 
 ## Чаты
 

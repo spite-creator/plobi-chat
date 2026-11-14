@@ -5,6 +5,7 @@
 import type { Catalog, StageType } from '../catalog/types.js';
 import { stateForPhase, type StageState } from '../machines/stage-state.js';
 import type { Phase } from '../machines/phase.js';
+import { withAcknowledgements } from './instructions.js';
 import type { ScopeStage } from './scope.js';
 import type { EventInput, StageInput, StageRequirement, TripInput } from './types.js';
 
@@ -86,7 +87,12 @@ export function createRun(trip: TripInput, catalog: Catalog): TripRun {
       state: 'ahead',
       phase: null,
       pauses: [],
-      requirements: (input.requirements ?? []).map((spec) => ({ spec, waived: false, gated: false, violated: false })),
+      requirements: (withAcknowledgements(input).requirements ?? []).map((spec) => ({
+        spec,
+        waived: false,
+        gated: false,
+        violated: false,
+      })),
       events: [],
     };
   });

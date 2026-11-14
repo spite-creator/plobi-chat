@@ -2,8 +2,7 @@
  * Engine input (a trip and its event journal) and output (computed state).
  * Times are ISO-8601 strings in UTC.
  */
-import type { Role, StageKind } from '../catalog/types.js';
-import type { RequirementSpec } from '../catalog/types.js';
+import type { InstructionContent, RequirementSpec, Role, StageKind } from '../catalog/types.js';
 import type { Phase, Profile } from '../machines/phase.js';
 import type { StageState } from '../machines/stage-state.js';
 import type { TripState } from '../machines/trip-state.js';
@@ -12,8 +11,15 @@ import type { TripState } from '../machines/trip-state.js';
 
 export interface StageRequirement extends RequirementSpec {
   readonly id: string;
-  readonly source: 'stage_type' | 'tag_rule' | 'manual';
+  readonly source: 'stage_type' | 'tag_rule' | 'instruction' | 'manual';
   readonly template?: string;
+}
+
+export interface StageInstruction extends InstructionContent {
+  readonly id: string;
+  /** Grows on every change; an acknowledgement counts only for the current revision. */
+  readonly revision: number;
+  readonly source: 'place' | 'instruction_rule' | 'manual';
 }
 
 export interface StageInput {
@@ -22,6 +28,7 @@ export interface StageInput {
   readonly assigneeId?: string;
   readonly tags?: readonly string[];
   readonly requirements?: readonly StageRequirement[];
+  readonly instructions?: readonly StageInstruction[];
   readonly isAuto?: boolean;
 }
 
@@ -120,6 +127,15 @@ export interface RequirementStatus {
   readonly notApplicable: boolean;
 }
 
+export interface InstructionStatus {
+  readonly id: string;
+  readonly revision: number;
+  /** The app shows it now (its show_at phase is reached). */
+  readonly visible: boolean;
+  /** Acknowledged in its current revision (only for instructions that require it). */
+  readonly acknowledged?: boolean;
+}
+
 export interface StageResult {
   readonly id: string;
   readonly typeCode: string;
@@ -135,6 +151,7 @@ export interface StageResult {
   /** Sum of closed pauses, milliseconds. */
   readonly pausedMs: number;
   readonly requirements: readonly RequirementStatus[];
+  readonly instructions: readonly InstructionStatus[];
 }
 
 export interface IncidentResult {

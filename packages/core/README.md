@@ -21,6 +21,7 @@ src/
 | `availableEvents(trip, events, catalog, query)` | какие кнопки показать пользователю на этапе и чего не хватает для перехода |
 | `insertTransits(points, catalog)` | вставляет транзиты между точками |
 | `materializeRequirements(stage, tags, catalog)` | требования этапа по типу и по тегам |
+| `materializeInstructions(stage, tags, catalog, place)` | инструкции этапа из места и правил; «Ознакомлен» становится требованием |
 | `stageTypeMap(catalog, code)` | автомат типа этапа с событиями, ролями и требованиями на переходах |
 | `validateCatalog(catalog)` | проблемы в настройках справочника |
 | `phaseDiagram`, `stageStateDiagram`, `tripStateDiagram` | Mermaid-схемы, построенные из кода |

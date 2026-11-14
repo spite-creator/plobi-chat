@@ -7,6 +7,7 @@
 import type { Catalog, RequirementKind } from '../catalog/types.js';
 import { PHASE_RANK, type Phase } from '../machines/phase.js';
 import { isEmptyValue } from './fields.js';
+import { ACKNOWLEDGE_EVENT } from './instructions.js';
 import { phaseTime, type AppliedEvent, type RequirementRun, type StageRun } from './run.js';
 import type { StageRequirement } from './types.js';
 
@@ -38,6 +39,15 @@ const countValues: Measure = (req, events, windowStart) =>
 const countEvents: Measure = (req, events, windowStart) =>
   events.filter((e) => e.at >= windowStart && e.input.typeCode === req.eventType).length;
 
+/** Only an acknowledgement of the current revision counts. */
+const countAcknowledgements: Measure = (req, events) =>
+  events.filter(
+    (e) =>
+      e.input.typeCode === ACKNOWLEDGE_EVENT &&
+      e.input.values?.['instructionId'] === req.instructionId &&
+      e.input.values?.['revision'] === req.instructionRevision,
+  ).length;
+
 const MEASURES: Readonly<Record<RequirementKind, Measure>> = {
   photo: countAttachments('photo'),
   video: countAttachments('video'),
@@ -48,6 +58,7 @@ const MEASURES: Readonly<Record<RequirementKind, Measure>> = {
   text: countValues,
   checklist: countValues,
   event: countEvents,
+  acknowledgement: countAcknowledgements,
 };
 
 /** Start of the capture window, or +Infinity if its phase was not reached yet. */

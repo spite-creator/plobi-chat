@@ -8,6 +8,7 @@ import type {
   EventScope,
   EventType,
   IncidentType,
+  InstructionRule,
   RequirementRule,
   RequirementTemplate,
   StageType,
@@ -173,6 +174,10 @@ const EVENT_TYPES: EventType[] = [
     { key: 'temperature', kind: 'number', required: true },
     photos(1, false),
   ]),
+  detail('instruction_acknowledged', 'Ознакомлен', { states: ['ahead', 'in_progress'] }, [
+    { key: 'instructionId', kind: 'text', required: true },
+    { key: 'revision', kind: 'number', required: true },
+  ]),
   detail('fuel_receipt', 'Заправка', { kinds: ['transit'] }, [
     { key: 'liters', kind: 'number', required: true },
     { key: 'receipt', kind: 'photo', required: true },
@@ -240,10 +245,27 @@ const REQUIREMENT_RULES: RequirementRule[] = [
   { template: 'clean_body_photo', stageTypes: ['loading'], tagsRequired: ['food'] },
 ];
 
+// ---------- instructions ----------
+
+const INSTRUCTION_RULES: InstructionRule[] = [
+  {
+    code: 'adr_parking',
+    tagsRequired: ['adr'],
+    instruction: { kind: 'text', text: ru('Опасный груз: не останавливаться у жилых домов и АЗС'), showAt: 'always', ackBeforePhase: 'arrived' },
+  },
+  {
+    code: 'reefer_check',
+    stageTypes: ['loading'],
+    tagsRequired: ['reefer'],
+    instruction: { kind: 'text', text: ru('Проверьте, что реф включён и выставлена температура по заявке'), showAt: 'arrived', ackBeforePhase: 'started' },
+  },
+];
+
 export const BASE_CATALOG: Catalog = {
   stageTypes: byCode(STAGE_TYPES),
   eventTypes: byCode(EVENT_TYPES),
   incidentTypes: byCode(INCIDENT_TYPES),
   requirementTemplates: byCode(REQUIREMENT_TEMPLATES),
   requirementRules: REQUIREMENT_RULES,
+  instructionRules: INSTRUCTION_RULES,
 };

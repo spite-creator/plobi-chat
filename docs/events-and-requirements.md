@@ -94,7 +94,7 @@
 ```
 Requirement
   title                  «Фото процесса погрузки»
-  kind                   photo | document | signature | scan | number | text | checklist | event
+  kind                   photo | document | signature | scan | number | text | checklist | event | acknowledgement
   min / max              например, фото ≥ 3
   before_phase           до какой фазы должно быть выполнено: started | completed | departed ...
   capture_window         когда собранное засчитывается: например, от «Начато» до перехода
