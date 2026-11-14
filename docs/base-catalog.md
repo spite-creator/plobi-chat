@@ -16,8 +16,8 @@
 | `work_started` | Начата работа / В процессе | → in_progress |
 | `paused` | Пауза | → paused ⟨причина⟩ |
 | `resumed` | Продолжить | → in_progress |
-| `work_finished` | Работа закончена | → work_done |
-| `departed` | Убыл | → completed |
+| `work_finished` | Работа завершена | → completed |
+| `departed` | Убыл | → departed |
 
 Типы этапов ниже добавляют к ним свои формулировки и уточнения.
 
@@ -54,16 +54,16 @@
 | `queue_joined` | Встал в очередь | · arrived | номер в очереди |
 | `at_dock` | Поставлен на рампу | · arrived | номер рампы |
 | `loading_started` / `unloading_started` | Начало погрузки / выгрузки | → in_progress | — |
-| `photo_cargo` | Фото груза | · in_progress, work_done | фото |
-| `temp_reading` | Температура | · in_progress, work_done | °C, фото дисплея |
-| `loaded` / `unloaded` | Погружен / Выгружен | → work_done | фото, кол-во паллет |
-| `seal_set` | Пломба установлена | · work_done | номер, фото |
-| `docs_received` / `docs_signed` | Документы получены / подписаны | · work_done | фото CMR/ТТН |
+| `photo_cargo` | Фото груза | · in_progress, completed | фото |
+| `temp_reading` | Температура | · in_progress, completed | °C, фото дисплея |
+| `loaded` / `unloaded` | Погружен / Выгружен | → completed | фото, кол-во паллет |
+| `seal_set` | Пломба установлена | · completed | номер, фото |
+| `docs_received` / `docs_signed` | Документы получены / подписаны | · completed | фото CMR/ТТН |
 | `refused` | Отказ в погрузке / приёмке | · arrived, in_progress | причина, фото |
-| `claim` | Расхождение при выгрузке | · in_progress, work_done | описание, фото |
+| `claim` | Расхождение при выгрузке | · in_progress, completed | описание, фото |
 
 Требования по умолчанию для погрузки: `loaded`, `seal_set`, `docs_received`
-обязательны до `completed` («Убыл»).
+обязательны до «Убыл» (`departed`).
 
 ### Таможня / контроль
 
@@ -74,7 +74,7 @@
 | `inspection_started` / `inspection_finished` | Досмотр начат / окончен | · in_progress | — |
 | `detained` | Задержан | → paused | причина |
 | `detention_lifted` | Задержание снято | → in_progress | — |
-| `released` | Выпуск | → work_done | номер декларации |
+| `released` | Выпуск | → completed | номер декларации |
 
 ### Граница
 
@@ -82,7 +82,7 @@
 |---|---|---|
 | `border_queue` | Очередь на границе | · arrived |
 | `border_control_started` | Начат контроль | → in_progress |
-| `border_crossed` | Границу пересёк | → completed |
+| `border_crossed` | Границу пересёк | → departed |
 
 ### Паромный порт
 
@@ -91,8 +91,8 @@
 | `checked_in` | Регистрация | · arrived | фото билета, номер брони |
 | `missed_departure` | Не попал на рейс | · arrived | новый рейс, ETA |
 | `boarding` | Посадка | → in_progress | — |
-| `on_board` | На борту | → completed | — |
-| `disembarked` | Съехал с парома | → completed (порт прибытия) | — |
+| `on_board` | На борту | → departed | — |
+| `disembarked` | Съехал с парома | → departed (порт прибытия) | — |
 
 ### Отцепка / сцепка / смена водителя
 
@@ -102,7 +102,7 @@
 | `trailer_coupled` | Прицеп сцеплен | → in_progress | фото, номер прицепа, пломба |
 | `handover` | ТС передано | → in_progress | фото, пробег, топливо |
 
-После этих событий этап закрывается обычным «Убыл» (`completed`).
+После этих событий этап закрывается обычным «Убыл» (`departed`).
 
 ## События транзита
 
@@ -142,7 +142,7 @@
 | `slot_confirmed` | Слот на складе подтверждён | уточняющее (этап впереди) | время, номер слота |
 | `ferry_booked` | Паром забронирован | уточняющее (этап впереди) | судно, рейс, бронь, время |
 | `customer_notified` | Клиент уведомлён | уточняющее | комментарий |
-| `downtime_confirmed` | Простой подтверждён | уточняющее (completed) | часы, комментарий |
+| `downtime_confirmed` | Простой подтверждён | уточняющее (departed) | часы, комментарий |
 | `stage_skipped` | Этап пропущен | → skipped | причина |
 | — | Любое статусное событие за водителя | `forced` | причина |
 | `incident_acknowledged` / `incident_resolved` | Инцидент принят / решён | инцидент | комментарий |

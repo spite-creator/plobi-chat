@@ -39,7 +39,7 @@ StageType                       # тип этапа: погрузка, тамо�
 EventType                       # тип события
   code, name{ru,en,...}, icon, color, is_system
   action: status | detail | incident_open | incident_close | system
-  sets_status?                  # для action = status: arrived | in_progress | paused | work_done | completed
+  sets_status?                  # для action = status: arrived | in_progress | paused | completed | departed
   allowed_in[]                  # в каких статусах этапа доступно (пусто = в любых активных)
   allowed_roles[]               # кто может выставлять: driver / dispatcher / ...
   stage_types[]                 # к каким типам этапов относится (пусто = ко всем, «универсальное»)
@@ -55,7 +55,7 @@ IncidentType                    # поломка, ДТП, повреждение
 RequirementType                 # шаблон требования этапа
   code, name, kind: checkbox | photo | document | signature | number | text | select
   fulfilled_by_event_type?      # каким уточняющим событием закрывается
-  blocks_status                 # до какого статуса обязательно (обычно completed)
+  blocks_status                 # до какого статуса обязательно (обычно departed)
 ```
 
 Автомат статусов один и зафиксирован в коде, тип этапа выбирает только профиль,
@@ -84,7 +84,7 @@ RequirementType                 # шаблон требования этапа
 ```
 Trip
   id, external_id, number
-  status: draft | assigned | accepted | in_progress | completed | cancelled
+  status: draft | assigned | accepted | in_progress | finished | closed | cancelled
   driver_id, co_driver_id?, dispatcher_id
   vehicle {plate, model}, trailer {plate}       # пока свободные поля, справочник ТС потом
   cargo { description, weight_kg, volume_m3, pallets, adr_class?, temp_min?, temp_max? }
@@ -96,9 +96,9 @@ Stage                                           # этап: точка или т
   id, external_id, trip_id, seq
   stage_type_id, kind: point | transit          # kind дублируется из типа для быстрых запросов
   # вычисляемые поля (кэш, пересчитываются из журнала событий):
-  status?                                       # null (этап впереди) | arrived | in_progress | paused | work_done | completed | skipped
-  status_category?: active | done
-  arrived_at?, started_at?, work_done_at?, completed_at?
+  status?                                       # null | arrived | in_progress | paused | completed | departed | skipped
+  phase: ahead | current | passed          # положение этапа в рейсе, выводится из status
+  arrived_at?, started_at?, completed_at?, departed_at?   # у транзита: started_at, completed_at
   pause_total_sec
   assignee_id?                                  # исполнитель; пусто — водитель рейса
   is_auto: bool                                 # транзит вставлен сервером автоматически
@@ -127,7 +127,7 @@ StageRequirement
 этого статуса (`blocks_status`). Диспетчер может выставить его
 принудительно, с причиной; это фиксируется в журнале.
 
-В каждый момент у рейса не больше одного этапа с `status_category = active`.
+В каждый момент у рейса не больше одного этапа с `phase = current`.
 
 ## Событие
 
