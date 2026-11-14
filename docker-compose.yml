@@ -1,0 +1,37 @@
+# Plobi: the application and the database in separate containers.
+# Settings come from .env (see .env.example). To use an existing PostgreSQL,
+# point DATABASE_URL at it and remove the plobi-db service.
+
+services:
+  plobi-app:
+    image: plobi/app:${PLOBI_VERSION:-latest}
+    build: .
+    restart: unless-stopped
+    depends_on:
+      plobi-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${DB_USER:-plobi}:${DB_PASSWORD:?set DB_PASSWORD in .env}@plobi-db:5432/${DB_NAME:-plobi}
+      ADMIN_LOGIN: ${ADMIN_LOGIN:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "${PLOBI_PORT:-8080}:8080"
+
+  plobi-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-plobi}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      POSTGRES_DB: ${DB_NAME:-plobi}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  db-data:

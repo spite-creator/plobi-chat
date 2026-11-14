@@ -32,3 +32,35 @@
 - [Базовые справочники этапов и событий](docs/base-catalog.md)
 - [Принципы разработки](docs/engineering.md)
 - [План работ (roadmap)](docs/roadmap.md)
+
+## Запуск
+
+### Поставка (Docker)
+
+```bash
+cp .env.example .env        # задать DB_PASSWORD и ADMIN_PASSWORD
+docker compose up -d
+```
+
+Два контейнера: `plobi-app` (приложение) и `plobi-db` (PostgreSQL, данные в
+томе `db-data`). Вместо `plobi-db` можно указать свою PostgreSQL через
+`DATABASE_URL`. Если Docker Hub недоступен, базовый образ задаётся
+параметром сборки `NODE_IMAGE` (зеркало реестра).
+
+API: `http://<сервер>:8080/api/v1`, документация — `/api/docs`.
+
+### Разработка
+
+```bash
+pnpm install
+pnpm test                   # ядро и сервер (серверу нужна PostgreSQL, см. apps/server/README.md)
+```
+
+## Структура
+
+```
+packages/core   ядро: автоматы, ярлыки, требования, инструкции (без БД и сети)
+apps/server     сервер: модули identity, catalog, directory, trips, automata
+docs/           документация продукта
+```
+
