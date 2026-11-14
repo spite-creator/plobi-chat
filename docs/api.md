@@ -1,0 +1,117 @@
+# API
+
+Принцип: **интерфейс PWA работает через то же публичное API**, что и
+интеграции. Поэтому любая функция приложения доступна извне.
+
+- REST + JSON, префикс `/api/v1`, спецификация OpenAPI 3.1 по адресу
+  `/api/v1/openapi.json` и Swagger UI по `/api/docs`.
+- Авторизация: `Authorization: Bearer <token>`. Это либо токен пользователя,
+  либо токен интеграции со scopes.
+- Идемпотентность: для POST можно передать заголовок `Idempotency-Key`.
+  События и сообщения идемпотентны по своему `id`.
+- Пагинация курсорная: `?limit=50&cursor=...`.
+- Upsert по внешнему ключу: `PUT /api/v1/trips/by-external-id/{external_id}`.
+- Действия от имени пользователя: токен интеграции со scope `act_as` может
+  передать `X-Act-As-User: <user id | ext:external_id>`. Например, чтобы
+  отправить сообщение от имени диспетчера из 1С.
+
+## Основные ресурсы
+
+### Пользователи
+```
+GET    /users
+POST   /users
+PUT    /users/by-external-id/{ext}
+PATCH  /users/{id}
+POST   /users/{id}/deactivate
+```
+
+### Справочники
+```
+GET/POST/PATCH  /stage-types
+GET/POST/PATCH  /event-types
+GET/POST/PATCH  /requirement-types
+```
+
+### Рейсы
+```
+GET    /trips?status=&driver_id=&from=&to=
+POST   /trips                          # рейс вместе с этапами и требованиями одним запросом
+PUT    /trips/by-external-id/{ext}     # upsert целиком
+GET    /trips/{id}                     # рейс, этапы, требования, последние события
+PATCH  /trips/{id}
+POST   /trips/{id}/assign              # { driver_id }
+POST   /trips/{id}/cancel
+
+POST   /trips/{id}/stages              # добавить этап
+PATCH  /stages/{id}
+POST   /trips/{id}/stages/reorder
+```
+
+Пример создания рейса:
+```json
+POST /api/v1/trips
+{
+  "external_id": "1C-000123",
+  "number": "R-2026-0451",
+  "driver": { "external_id": "DRV-17" },
+  "vehicle": { "plate": "А123ВС 77" },
+  "cargo": { "description": "Паллеты, бытовая химия", "weight_kg": 18000, "pallets": 33 },
+  "stages": [
+    {
+      "type": "loading",
+      "address": "Москва, ул. Складская, 1",
+      "lat": 55.75, "lon": 37.61, "timezone": "Europe/Moscow",
+      "window_from": "2026-11-20T06:00:00Z", "window_to": "2026-11-20T09:00:00Z",
+      "requirements": [
+        { "type": "photo_seal", "required": true },
+        { "type": "signed_cmr", "required": true }
+      ]
+    },
+    { "type": "customs", "address": "МАПП Брест" },
+    { "type": "unloading", "address": "Warszawa, ul. Magazynowa 5", "timezone": "Europe/Warsaw" }
+  ]
+}
+```
+
+### События
+```
+GET    /trips/{id}/events
+POST   /trips/{id}/events              # { id, event_type, stage_id?, occurred_at, lat, lon, values, attachment_ids[] }
+POST   /events/batch                   # пакетная отправка офлайн-очереди
+```
+
+### Чаты и сообщения
+```
+GET    /chats
+POST   /chats                          # { kind: direct|group, member_ids[], title? }
+POST   /chats/{id}/members
+DELETE /chats/{id}/members/{user_id}
+GET    /chats/{id}/messages?cursor=
+POST   /chats/{id}/messages            # { id, kind, text, attachment_ids[] }
+POST   /chats/{id}/read                # { last_read_message_id }
+```
+
+### Файлы
+```
+POST   /attachments                    # multipart, возвращает id
+GET    /attachments/{id}               # скачать (проверка прав)
+```
+
+### Позиции (с внешних GPS-трекеров)
+```
+POST   /trips/{id}/positions           # [{ ts, lat, lon, speed? }]
+```
+
+## Realtime
+
+`GET /api/v1/ws` поддерживает одно WebSocket-соединение на клиента. Сервер
+присылает:
+`message.created`, `message.read`, `event.created`, `trip.updated`,
+`stage.updated`, `typing`.
+
+## Вебхуки
+
+На те же типы событий. Тело подписывается HMAC-SHA256 в заголовке
+`X-Plobi-Signature`. При ошибке доставка повторяется с экспоненциальной
+задержкой до 24 часов.
