@@ -28,30 +28,40 @@ User
 ```
 StageType                       # тип этапа: погрузка, таможня, порт, транзит по дороге...
   code, name{ru,en,...}, icon, color, is_system, sort
+```
+StageType                       # тип этапа: погрузка, таможня, порт, транзит по дороге...
+  code, name{ru,en,...}, icon, color, is_system, sort
   kind: point | transit
   transit_mode?: road | ferry | rail     # только для kind = transit
-  states[]                      # { code, name, category: pending|active|done|skipped, initial?: bool }
-  transitions[]                 # { event_type, from[], to, requires_requirements?: bool }
+  work_mode?: split | single | none      # только для kind = point
+  depart_without_work: allow | with_reason | deny
 
 EventType                       # тип события
   code, name{ru,en,...}, icon, color, is_system
-  action: transition | info | incident_open | incident_close | system
+  action: status | detail | incident_open | incident_close | system
+  sets_status?                  # для action = status: arrived | in_work | paused | work_done | departed | moving | stopped ...
+  allowed_in[]                  # в каких статусах этапа доступно (пусто = в любых активных)
   allowed_roles[]               # кто может выставлять: driver / dispatcher / ...
-  stage_types[]                 # где доступно (для info и инцидентов; пусто = везде)
+  stage_types[]                 # к каким типам этапов относится (пусто = ко всем, «универсальное»)
   fields[]                      # что нужно заполнить (см. ниже)
   incident_type?                # для incident_open / incident_close
   severity: info | warning | critical   # critical — сразу уведомить диспетчера
 
 IncidentType                    # поломка, ДТП, повреждение груза...
-  code, name, blocks_progress: bool, severity
+  code, name, severity
+  blocks_progress: bool         # нельзя «Убыл», пока открыт
+  auto_pause: bool              # точка → paused, транзит → stopped
 
 RequirementType                 # шаблон требования этапа
   code, name, kind: checkbox | photo | document | signature | number | text | select
+  fulfilled_by_event_type?      # каким уточняющим событием закрывается
+  blocks_status                 # до какого статуса обязательно (обычно departed)
 ```
 
-При сохранении справочника автомат проверяется: у этапа есть ровно одно
-начальное состояние, из каждого состояния достижимо состояние категории
-`done`, а все события в переходах существуют и имеют `action = transition`.
+Автоматы статусов фиксированы в коде (один для точек, один для транзитов),
+см. [state-machine.md](state-machine.md). Компания настраивает только типы
+этапов и события. При сохранении события проверяется, что `sets_status`
+допустим для `kind` и `work_mode` выбранных типов этапов.
 
 ### Поля события (`fields`)
 
@@ -85,10 +95,13 @@ Trip
 Stage                                           # этап: точка или транзит
   id, external_id, trip_id, seq
   stage_type_id, kind: point | transit          # kind дублируется из типа для быстрых запросов
-  state                                         # код текущего состояния из автомата типа
-  state_category: pending | active | done | skipped
+  # вычисляемые поля (кэш, пересчитываются из журнала событий):
+  status                                        # point: pending|arrived|in_work|paused|work_done|departed|skipped
+                                                # transit: pending|moving|stopped|done|skipped
+  status_category: pending | active | done | skipped
+  arrived_at?, work_started_at?, work_finished_at?, departed_at?
+  pause_total_sec, stop_total_sec
   assignee_id?                                  # исполнитель; пусто — водитель рейса
-  started_at?, finished_at?
   is_auto: bool                                 # транзит вставлен сервером автоматически
   # для point:
   address, lat, lon, timezone
@@ -111,11 +124,11 @@ StageRequirement
   fulfilled_by_event_id?                        # каким событием закрыто
 ```
 
-Переход с флагом `requires_requirements` недоступен, пока не закрыты все
-обязательные требования этапа. Диспетчер может выполнить переход
+Статусное событие недоступно, пока не закрыты обязательные требования до
+этого статуса (`blocks_status`). Диспетчер может выставить его
 принудительно, с причиной; это фиксируется в журнале.
 
-В каждый момент у рейса не больше одного этапа с `state_category = active`.
+В каждый момент у рейса не больше одного этапа с `status_category = active`.
 
 ## Событие
 
@@ -132,8 +145,7 @@ Event
   attachments[]
   source: app | api | system
   forced: bool, force_reason?   # диспетчер выполнил переход за исполнителя
-  status: applied | conflict    # conflict — офлайн-событие не легло в текущий автомат
-  state_from?, state_to?        # для переходов: снимок для журнала
+  status: applied | conflict    # conflict — событие не легло в автомат при пересчёте
   incident_id?
 ```
 
