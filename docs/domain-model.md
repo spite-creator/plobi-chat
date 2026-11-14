@@ -23,21 +23,35 @@ User
 
 ## Справочники (настраиваются компанией)
 
+Подробно механика описана в [state-machine.md](state-machine.md).
+
 ```
-StageType                       # тип этапа: погрузка, выгрузка, таможня...
+StageType                       # тип этапа: погрузка, таможня, порт, транзит по дороге...
   code, name{ru,en,...}, icon, color, is_system, sort
+  kind: point | transit
+  transit_mode?: road | ferry | rail     # только для kind = transit
+  states[]                      # { code, name, category: pending|active|done|skipped, initial?: bool }
+  transitions[]                 # { event_type, from[], to, requires_requirements?: bool }
 
 EventType                       # тип события
   code, name{ru,en,...}, icon, color, is_system
+  action: transition | info | incident_open | incident_close | system
   allowed_roles[]               # кто может выставлять: driver / dispatcher / ...
-  stage_types[]                 # к каким типам этапов применимо (пусто = к любым, и к рейсу целиком)
+  stage_types[]                 # где доступно (для info и инцидентов; пусто = везде)
   fields[]                      # что нужно заполнить (см. ниже)
-  effect                        # влияние на статус: stage_start | stage_complete | trip_start | trip_complete | none
+  incident_type?                # для incident_open / incident_close
   severity: info | warning | critical   # critical — сразу уведомить диспетчера
+
+IncidentType                    # поломка, ДТП, повреждение груза...
+  code, name, blocks_progress: bool, severity
 
 RequirementType                 # шаблон требования этапа
   code, name, kind: checkbox | photo | document | signature | number | text | select
 ```
+
+При сохранении справочника автомат проверяется: у этапа есть ровно одно
+начальное состояние, из каждого состояния достижимо состояние категории
+`done`, а все события в переходах существуют и имеют `action = transition`.
 
 ### Поля события (`fields`)
 
@@ -68,24 +82,40 @@ Trip
   custom_fields: JSONB                          # любые поля клиента
   chat_id                                       # чат рейса создаётся автоматически
 
-Stage                                           # этап = точка маршрута
+Stage                                           # этап: точка или транзит
   id, external_id, trip_id, seq
-  stage_type_id
-  status: pending | in_progress | completed | skipped
+  stage_type_id, kind: point | transit          # kind дублируется из типа для быстрых запросов
+  state                                         # код текущего состояния из автомата типа
+  state_category: pending | active | done | skipped
+  assignee_id?                                  # исполнитель; пусто — водитель рейса
+  started_at?, finished_at?
+  is_auto: bool                                 # транзит вставлен сервером автоматически
+  # для point:
   address, lat, lon, timezone
   window_from, window_to                        # окно прибытия
   contact { name, phone }
+  # для transit:
+  planned_distance_km?, carrier_ref?            # например, судно и рейс парома
+  eta?                                          # последнее ETA из событий
   instructions: text
   custom_fields: JSONB
+
+Incident                                        # параллельный инцидент
+  id, trip_id, stage_id?, incident_type_id
+  status: open | acknowledged | resolved
+  opened_by_event_id, closed_by_event_id?
+  blocks_progress: bool
 
 StageRequirement
   id, stage_id, requirement_type_id, title, required: bool
   fulfilled_by_event_id?                        # каким событием закрыто
 ```
 
-Этап нельзя завершить событием с `effect = stage_complete`, пока не закрыты
-все обязательные требования. Диспетчер может завершить этап принудительно,
-это фиксируется в аудите.
+Переход с флагом `requires_requirements` недоступен, пока не закрыты все
+обязательные требования этапа. Диспетчер может выполнить переход
+принудительно, с причиной; это фиксируется в журнале.
+
+В каждый момент у рейса не больше одного этапа с `state_category = active`.
 
 ## Событие
 
@@ -100,7 +130,11 @@ Event
   lat, lon, accuracy_m  # геопозиция на момент события
   values: JSONB         # заполненные поля по схеме EventType.fields
   attachments[]
-  source: app | api
+  source: app | api | system
+  forced: bool, force_reason?   # диспетчер выполнил переход за исполнителя
+  status: applied | conflict    # conflict — офлайн-событие не легло в текущий автомат
+  state_from?, state_to?        # для переходов: снимок для журнала
+  incident_id?
 ```
 
 События не редактируются и не удаляются: это журнал. Ошибочное событие

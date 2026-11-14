@@ -22,6 +22,7 @@
 ## Документация
 
 - [Архитектура и развёртывание](docs/architecture.md)
+- [Этапы и события как конечный автомат](docs/state-machine.md)
 - [Модель данных](docs/domain-model.md)
 - [API](docs/api.md)
 - [Базовые справочники этапов и событий](docs/base-catalog.md)

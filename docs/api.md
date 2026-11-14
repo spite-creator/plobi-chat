@@ -17,6 +17,14 @@
 
 ## Основные ресурсы
 
+### Служебные
+```
+GET    /health                         # { status, instance_id, version } — без авторизации
+GET    /client-config                  # { instance_id, public_key, mirrors[], min_client_version, signature }
+GET/PUT /settings/mirrors              # admin: список зеркал с приоритетами
+POST   /invites                        # admin: ссылка/QR для подключения водителя
+```
+
 ### Пользователи
 ```
 GET    /users
@@ -74,11 +82,26 @@ POST /api/v1/trips
 }
 ```
 
+Транзиты между точками сервер вставляет сам (см.
+[state-machine.md](state-machine.md)). Явно переданный этап с `kind: transit`
+заменяет автоматический.
+
 ### События
 ```
 GET    /trips/{id}/events
+GET    /trips/{id}/available-events    # что можно выставить сейчас (для текущего пользователя)
 POST   /trips/{id}/events              # { id, event_type, stage_id?, occurred_at, lat, lon, values, attachment_ids[] }
 POST   /events/batch                   # пакетная отправка офлайн-очереди
+```
+
+Недопустимый переход в онлайне возвращает `409` с объяснением. Событие из
+офлайн-очереди (`/events/batch`) сохраняется со статусом `conflict`.
+
+### Инциденты
+```
+GET    /incidents?status=open
+POST   /incidents/{id}/acknowledge
+POST   /incidents/{id}/resolve
 ```
 
 ### Чаты и сообщения
