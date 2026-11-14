@@ -28,9 +28,6 @@ User
 ```
 StageType                       # тип этапа: погрузка, таможня, порт, транзит по дороге...
   code, name{ru,en,...}, icon, color, is_system, sort
-```
-StageType                       # тип этапа: погрузка, таможня, порт, транзит по дороге...
-  code, name{ru,en,...}, icon, color, is_system, sort
   kind: point | transit
   transit_mode?: road | ferry | rail     # только для kind = transit
   profile: point_split | point_single | point_simple | transit
@@ -40,10 +37,15 @@ EventType                       # тип события
   code, name{ru,en,...}, icon, color, is_system
   action: phase | detail | incident_open | incident_close | system
   sets_phase?                   # для action = phase: arrived | started | paused | resumed | completed | departed
-  allowed_in[]                  # в каких фазах этапа доступно (пусто = в любых, пока этап in_progress)
-  allowed_roles[]               # кто может выставлять: driver / dispatcher / ...
-  stage_types[]                 # к каким типам этапов относится (пусто = ко всем, «универсальное»)
-  fields[]                      # что нужно заполнить (см. ниже)
+  scope:                        # где доступно — «ярлыки», пустое = без ограничений
+    kinds[]                     #   point / transit
+    stage_types[]               #   конкретные типы этапов
+    transit_modes[]             #   road / ferry / rail
+    phases[]                    #   в каких фазах этапа
+    roles[]                     #   driver / dispatcher / observer / integration
+    assignee_only: bool         #   только исполнитель этапа
+    tags_required[], tags_excluded[]   # теги рейса или этапа: #reefer, #adr ...
+  fields[]                      # что водитель заполняет в форме события (см. ниже)
   incident_type?                # для incident_open / incident_close
   severity: info | warning | critical   # critical — сразу уведомить диспетчера
 
@@ -52,15 +54,26 @@ IncidentType                    # поломка, ДТП, повреждение
   blocks_progress: bool         # нельзя «Убыл», пока открыт
   auto_pause: bool              # активный этап in_progress → paused
 
-RequirementType                 # шаблон требования этапа
-  code, name, kind: checkbox | photo | document | signature | number | text | select
-  fulfilled_by_event_type?      # каким уточняющим событием закрывается
-  required_before_phase         # до какой фазы обязательно (обычно departed)
+RequirementTemplate             # шаблон требования (справочник)
+  code, title, instructions
+  kind: photo | document | signature | scan | number | text | checklist | event
+  min?, max?, source: camera | camera_or_gallery
+  event_type?                   # для kind = event
+  before_phase                  # до какой фазы должно быть выполнено
+  capture_window_from_phase?    # засчитывается собранное начиная с этой фазы
+  strictness: block | warn
+  waivable: bool
+
+RequirementRule                 # когда шаблон применяется автоматически
+  requirement_template_id
+  stage_types[], tags_required[]   # «у всех погрузок» / «у рейсов с #reefer»
 ```
 
+Подробнее о событиях и требованиях: [events-and-requirements.md](events-and-requirements.md).
+
 Автомат фаз один и зафиксирован в коде, тип этапа выбирает только профиль,
-см. [state-machine.md](state-machine.md). Компания настраивает только типы
-этапов и события. При сохранении события проверяется, что `sets_phase`
+см. [state-machine.md](state-machine.md). Компания настраивает типы этапов,
+события и требования. При сохранении события проверяется, что `sets_phase`
 допустим в профилях выбранных типов этапов.
 
 ### Поля события (`fields`)
@@ -72,7 +85,8 @@ RequirementType                 # шаблон требования этапа
   { "key": "photo",   "kind": "photo",  "required": true,  "min": 1, "max": 5 },
   { "key": "temp",    "kind": "number", "required": false, "unit": "°C" },
   { "key": "comment", "kind": "text",   "required": false },
-  { "key": "reason",  "kind": "select", "required": true,  "options": ["пробка", "погода", "поломка"] }
+  { "key": "reason",  "kind": "select", "required": true,  "options": ["пробка", "погода", "поломка", "прочее"] },
+  { "key": "comment2","kind": "text",   "required": true,  "show_if": { "reason": "прочее" } }
 ]
 ```
 
@@ -84,7 +98,8 @@ RequirementType                 # шаблон требования этапа
 ```
 Trip
   id, external_id, number
-  status: draft | assigned | accepted | in_progress | finished | closed | cancelled
+  state: draft | assigned | accepted | in_progress | finished | closed | cancelled
+  tags[]                                        # #reefer, #adr, #customs ...
   driver_id, co_driver_id?, dispatcher_id
   vehicle {plate, model}, trailer {plate}       # пока свободные поля, справочник ТС потом
   cargo { description, weight_kg, volume_m3, pallets, adr_class?, temp_min?, temp_max? }
@@ -96,11 +111,12 @@ Stage                                           # этап: точка или т
   id, external_id, trip_id, seq
   stage_type_id, kind: point | transit          # kind дублируется из типа для быстрых запросов
   # вычисляемые поля (кэш, пересчитываются из журнала событий):
-  status: ahead | in_progress | passed | skipped   # положение этапа в рейсе
+  state: ahead | in_progress | passed | skipped    # положение этапа в рейсе, свой автомат
   phase?: arrived | started | paused | resumed | completed | departed   # последняя веха
   arrived_at?, started_at?, completed_at?, departed_at?   # у транзита: started_at, completed_at
   pause_total_sec
   assignee_id?                                  # исполнитель; пусто — водитель рейса
+  tags[]                                        # дополняют теги рейса
   is_auto: bool                                 # транзит вставлен сервером автоматически
   # для point:
   address, lat, lon, timezone
@@ -114,20 +130,27 @@ Stage                                           # этап: точка или т
 
 Incident                                        # параллельный инцидент
   id, trip_id, stage_id?, incident_type_id
-  status: open | acknowledged | resolved
+  state: open | acknowledged | resolved
   opened_by_event_id, closed_by_event_id?
   blocks_progress: bool
 
-StageRequirement
-  id, stage_id, requirement_type_id, title, required: bool
-  fulfilled_by_event_id?                        # каким событием закрыто
+StageRequirement                                # требование на конкретном этапе
+  id, stage_id, requirement_template_id?        # пусто — разовое требование из API / от диспетчера
+  source: stage_type | tag_rule | manual
+  ...поля шаблона (копия, можно править для этого этапа)
+  state: pending | fulfilled | waived | violated
+  evidence[]                                    # какие вложения / события его закрыли
+  waived_by?, waive_reason?
 ```
 
-Событие фазы недоступно, пока не закрыты обязательные требования до этой
-фазы (`required_before_phase`). Диспетчер может выставить его
-принудительно, с причиной; это фиксируется в журнале.
+Требования копируются на этап при создании рейса (по типу этапа и по
+правилам тегов) и дальше живут на этапе. Событие фазы недоступно, пока не
+выполнены требования `block` до этой фазы. Водитель без связи может пройти с
+нарушением (`requirements_unmet`). Диспетчер может снять требование или
+выставить событие принудительно; оба действия фиксируются в журнале с
+причиной.
 
-В каждый момент у рейса не больше одного этапа со статусом `in_progress`.
+В каждый момент у рейса не больше одного этапа в состоянии `in_progress`.
 
 ## Событие
 
@@ -144,7 +167,8 @@ Event
   attachments[]
   source: app | api | system
   forced: bool, force_reason?   # диспетчер выполнил переход за исполнителя
-  status: applied | conflict    # conflict — событие не легло в автомат при пересчёте
+  apply_result: applied | conflict   # conflict — событие не легло в автомат при пересчёте
+  requirements_unmet: bool      # переход выполнен с невыполненными требованиями (офлайн)
   incident_id?
 ```
 

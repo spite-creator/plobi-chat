@@ -38,12 +38,13 @@ POST   /users/{id}/deactivate
 ```
 GET/POST/PATCH  /stage-types
 GET/POST/PATCH  /event-types
-GET/POST/PATCH  /requirement-types
+GET/POST/PATCH  /requirement-templates
+GET/POST/PATCH  /requirement-rules
 ```
 
 ### Рейсы
 ```
-GET    /trips?status=&driver_id=&from=&to=
+GET    /trips?state=&driver_id=&tag=&from=&to=
 POST   /trips                          # рейс вместе с этапами и требованиями одним запросом
 PUT    /trips/by-external-id/{ext}     # upsert целиком
 GET    /trips/{id}                     # рейс, этапы, требования, последние события
@@ -100,9 +101,23 @@ POST   /events/batch                   # пакетная отправка оф�
 встаёт на своё место по `occurred_at`, а если не вписывается в автомат,
 сохраняется со статусом `conflict`.
 
+### Требования этапа
+```
+GET    /stages/{id}/requirements       # с состоянием выполнения и доказательствами
+POST   /stages/{id}/requirements       # добавить разовое требование
+POST   /stage-requirements/{id}/waive  # снять с причиной (диспетчер)
+```
+
+### Автоматы (для админки и интеграторов)
+```
+GET    /state-machines                 # описание автоматов состояний и фаз по профилям (из кода)
+GET    /stage-types/{id}/map           # автомат типа этапа: события, роли, требования на переходах
+POST   /simulate                       # прогнать рейс и список событий без сохранения
+```
+
 ### Инциденты
 ```
-GET    /incidents?status=open
+GET    /incidents?state=open
 POST   /incidents/{id}/acknowledge
 POST   /incidents/{id}/resolve
 ```
