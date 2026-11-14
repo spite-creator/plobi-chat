@@ -61,30 +61,35 @@ POST   /trips/{id}/stages/reorder
 ```json
 POST /api/v1/trips
 {
-  "external_id": "1C-000123",
+  "externalId": "1C-000123",
   "number": "R-2026-0451",
-  "driver": { "external_id": "DRV-17" },
+  "driver": { "externalId": "DRV-17" },
+  "tags": ["reefer"],
   "vehicle": { "plate": "А123ВС 77" },
-  "cargo": { "description": "Паллеты, бытовая химия", "weight_kg": 18000, "pallets": 33 },
+  "cargo": { "description": "Паллеты, бытовая химия", "weightKg": 18000, "pallets": 33 },
   "stages": [
     {
       "type": "loading",
-      "place": { "external_id": "WH-NORTH" },
-      "instructions": [
-        { "kind": "text", "text": "Сегодня Ашота нет, звони Вове", "show_at": "arrived" }
-      ],
-      "lat": 55.75, "lon": 37.61, "timezone": "Europe/Moscow",
-      "window_from": "2026-11-20T06:00:00Z", "window_to": "2026-11-20T09:00:00Z",
+      "place": { "externalId": "WH-NORTH" },
+      "details": { "windowFrom": "2026-11-20T06:00:00Z", "windowTo": "2026-11-20T09:00:00Z" },
       "requirements": [
-        { "type": "photo_seal", "required": true },
-        { "type": "signed_cmr", "required": true }
+        { "kind": "info", "title": "Позвони Ашоту, он откроет ворота",
+          "contact": { "name": "Ашот", "phone": "+7 900 000-00-00" }, "showAt": "arrived" },
+        { "kind": "acknowledgement", "title": "Не грузить выше 2 ярусов",
+          "showAt": "arrived", "beforePhase": "started" },
+        { "kind": "photo", "title": "Фото крепления ремнями", "min": 2, "beforePhase": "departed" }
       ]
     },
-    { "type": "customs", "address": "МАПП Брест" },
-    { "type": "unloading", "address": "Warszawa, ul. Magazynowa 5", "timezone": "Europe/Warsaw" }
+    { "type": "customs_export", "details": { "address": "МАПП Брест" } },
+    { "type": "unloading", "details": { "address": "Warszawa, ul. Magazynowa 5", "timezone": "Europe/Warsaw" } }
   ]
 }
 ```
+
+Место (`place`) даёт адрес, координаты и часовой пояс; `details` этапа их
+уточняет. К требованиям, пришедшим с этапом, сервер добавляет требования по
+умолчанию для типа этапа (у погрузки — фото процесса, пломба, CMR; для
+`#reefer` — ещё температура).
 
 Транзиты между точками сервер вставляет сам (см.
 [state-machine.md](state-machine.md)). Явно переданный этап с `kind: transit`
@@ -109,29 +114,16 @@ POST   /events/batch                   # пакетная отправка оф�
 GET    /places?query=
 POST   /places
 PUT    /places/by-external-id/{ext}
-PATCH  /places/{id}                    # контакты, часы работы, постоянные инструкции
-```
-
-### Клиенты
-```
-GET    /customers?query=
-POST   /customers
-PUT    /customers/by-external-id/{ext}
-GET    /customers/{id}/rules            # требования и инструкции клиента
-PUT    /customers/{id}/rules
-```
-
-### Инструкции этапа
-```
-GET    /stages/{id}/instructions
-POST   /stages/{id}/instructions       # разовая инструкция
-PATCH  /stage-instructions/{id}        # изменение: растёт revision, водитель получает уведомление
+PATCH  /places/{id}                    # адрес, контакты, часы работы
 ```
 
 ### Требования этапа
+Требования приходят вместе с этапом при создании рейса (см. пример выше) и
+добавляются к требованиям по умолчанию для типа этапа.
 ```
 GET    /stages/{id}/requirements       # с состоянием выполнения и доказательствами
-POST   /stages/{id}/requirements       # добавить разовое требование
+POST   /stages/{id}/requirements       # добавить требование к этапу
+PATCH  /stage-requirements/{id}        # изменить: растёт revision, водитель получает уведомление
 POST   /stage-requirements/{id}/waive  # снять с причиной (диспетчер)
 ```
 

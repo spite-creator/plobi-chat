@@ -14,6 +14,7 @@ export interface CatalogIssue {
     | 'requirement_template_missing'
     | 'requirement_event_missing'
     | 'requirement_phase_not_in_profile'
+    | 'requirement_phase_missing'
     | 'incident_type_missing';
   readonly subject: string;
   readonly message: string;
@@ -74,6 +75,14 @@ export function validateCatalog(catalog: Catalog): CatalogIssue[] {
         message: `Rule refers to unknown template ${rule.template}`,
       });
       continue;
+    }
+    if (tpl.kind !== 'info' && !tpl.beforePhase) {
+      issues.push({
+        severity: 'error',
+        code: 'requirement_phase_missing',
+        subject: tpl.code,
+        message: `${tpl.code} must say before which phase it is required`,
+      });
     }
     if (tpl.kind === 'event' && (!tpl.eventType || !catalog.eventTypes[tpl.eventType])) {
       issues.push({

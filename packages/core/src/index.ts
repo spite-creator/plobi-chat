@@ -10,7 +10,6 @@ export * from './machines/trip-state.js';
 
 // catalog
 export * from './catalog/types.js';
-export * from './catalog/rule-scope.js';
 export { BASE_CATALOG } from './catalog/base.js';
 export { validateCatalog, type CatalogIssue } from './catalog/validate.js';
 
@@ -18,13 +17,7 @@ export { validateCatalog, type CatalogIssue } from './catalog/validate.js';
 export * from './engine/types.js';
 export { evaluateTrip, orderEvents } from './engine/evaluate.js';
 export { availableEvents, type AvailableEvent, type AvailableQuery } from './engine/available.js';
-export { materializeRequirements } from './engine/requirements.js';
-export {
-  ACKNOWLEDGE_EVENT,
-  acknowledgementRequirements,
-  isInstructionVisible,
-  materializeInstructions,
-} from './engine/instructions.js';
+export { ACKNOWLEDGE_EVENT, isVisible, materializeRequirements } from './engine/requirements.js';
 export { insertTransits, defaultTransitRule, type TransitRule } from './engine/route.js';
 export { missingFields } from './engine/fields.js';
 export { checkScope, type ScopeLabel } from './engine/scope.js';

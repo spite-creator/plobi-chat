@@ -1,11 +1,10 @@
-import type { Attachment, StageInstruction, StageRequirement } from '@plobi/core';
+import type { Attachment, StageRequirement } from '@plobi/core';
 import { boolean, index, integer, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 export const trips = pgTable('trips', {
   id: uuid('id').primaryKey().defaultRandom(),
   externalId: text('external_id').unique(),
   number: text('number').notNull(),
-  customerId: uuid('customer_id'),
   driverId: uuid('driver_id'),
   dispatcherId: uuid('dispatcher_id'),
   tags: text('tags').array().notNull().default([]),
@@ -44,7 +43,6 @@ export const stages = pgTable(
     tags: text('tags').array().notNull().default([]),
     details: jsonb('details').$type<StageDetails>().notNull().default({}),
     requirements: jsonb('requirements').$type<StageRequirement[]>().notNull().default([]),
-    instructions: jsonb('instructions').$type<StageInstruction[]>().notNull().default([]),
   },
   (t) => [index('stages_trip_idx').on(t.tripId, t.seq)],
 );

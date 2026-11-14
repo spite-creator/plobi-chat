@@ -14,10 +14,10 @@ import { installAuth, installErrorHandler } from './platform/http.js';
 import { automataRoutes } from './modules/automata/routes.js';
 import { catalogRoutes } from './modules/catalog/routes.js';
 import { CatalogService } from './modules/catalog/service.js';
-import { directoryRoutes } from './modules/directory/routes.js';
-import { DirectoryService } from './modules/directory/service.js';
 import { identityRoutes } from './modules/identity/routes.js';
 import { IdentityService } from './modules/identity/service.js';
+import { placeRoutes } from './modules/places/routes.js';
+import { PlaceService } from './modules/places/service.js';
 import { tripRoutes } from './modules/trips/routes.js';
 import { TripService } from './modules/trips/service.js';
 
@@ -32,8 +32,8 @@ export async function buildApp(config: Config, database: Database) {
   const bus = new EventBus((error, event) => app.log.error({ err: error, event }, 'domain event listener failed'));
   const identity = new IdentityService(db, config.sessionTtlHours);
   const catalog = new CatalogService(db, bus);
-  const directory = new DirectoryService(db, catalog);
-  const trips = new TripService(db, bus, catalog, directory, identity);
+  const places = new PlaceService(db);
+  const trips = new TripService(db, bus, catalog, places, identity);
 
   await catalog.seedSystemEntries();
   const admin = await identity.ensureBootstrapAdmin(config.bootstrapAdmin.login, config.bootstrapAdmin.password);
@@ -63,7 +63,7 @@ export async function buildApp(config: Config, database: Database) {
       api.get('/openapi.json', { schema: { hide: true } }, async () => app.swagger());
       await api.register(identityRoutes(identity));
       await api.register(catalogRoutes(catalog));
-      await api.register(directoryRoutes(directory));
+      await api.register(placeRoutes(places));
       await api.register(tripRoutes(trips));
       await api.register(automataRoutes(catalog));
     },

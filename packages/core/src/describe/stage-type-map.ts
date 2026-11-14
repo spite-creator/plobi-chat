@@ -45,14 +45,14 @@ export function stageTypeMap(catalog: Catalog, stageTypeCode: string): StageType
   const events = Object.values(catalog.eventTypes).filter((e) => eventFitsStageType(e, stageType));
   const templates = catalog.requirementRules
     .filter((r) => !r.stageTypes || r.stageTypes.includes(stageType.code))
-    .filter((r) => !r.customers && !r.places) // shown on the customer / place card instead
     .map((r) => catalog.requirementTemplates[r.template])
     .filter((t): t is RequirementTemplate => t !== undefined);
 
   const transitions = profileTransitions(stageType.profile).map((t): TransitionMap => {
-    const gatedHere = templates.filter((tpl) => {
-      const reached = PHASE_RANK[t.to] >= PHASE_RANK[tpl.beforePhase];
-      const before = t.from === null || PHASE_RANK[t.from] < PHASE_RANK[tpl.beforePhase];
+    const gatedHere = templates.filter(({ beforePhase }) => {
+      if (!beforePhase) return false;
+      const reached = PHASE_RANK[t.to] >= PHASE_RANK[beforePhase];
+      const before = t.from === null || PHASE_RANK[t.from] < PHASE_RANK[beforePhase];
       return reached && before;
     });
     return {

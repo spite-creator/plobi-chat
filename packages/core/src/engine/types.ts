@@ -2,43 +2,35 @@
  * Engine input (a trip and its event journal) and output (computed state).
  * Times are ISO-8601 strings in UTC.
  */
-import type { RuleOrigin } from '../catalog/rule-scope.js';
-import type { InstructionContent, RequirementSpec, Role, StageKind } from '../catalog/types.js';
+import type { RequirementKind, RequirementSpec, Role, StageKind } from '../catalog/types.js';
 import type { Phase, Profile } from '../machines/phase.js';
 import type { StageState } from '../machines/stage-state.js';
 import type { TripState } from '../machines/trip-state.js';
 
 // ---------- input ----------
 
+/** A requirement on a concrete stage. */
 export interface StageRequirement extends RequirementSpec {
   readonly id: string;
-  readonly source: RuleOrigin | 'instruction' | 'manual';
+  /** Default of the stage type, default for a tag, or added to this stage (API / dispatcher). */
+  readonly source: 'stage_type' | 'tag_rule' | 'manual';
   readonly template?: string;
-}
-
-export interface StageInstruction extends InstructionContent {
-  readonly id: string;
-  /** Grows on every change; an acknowledgement counts only for the current revision. */
-  readonly revision: number;
-  /** `place` = permanent instruction of the place card; others = catalog rules or manual. */
-  readonly source: RuleOrigin | 'manual';
+  /** Grows on every change; an acknowledgement counts only for the current revision. Default 1. */
+  readonly revision?: number;
 }
 
 export interface StageInput {
   readonly id: string;
   readonly typeCode: string;
-  readonly placeId?: string;
   readonly assigneeId?: string;
   readonly tags?: readonly string[];
   readonly requirements?: readonly StageRequirement[];
-  readonly instructions?: readonly StageInstruction[];
   readonly isAuto?: boolean;
 }
 
 export interface TripInput {
   readonly id: string;
   readonly driverId?: string;
-  readonly customerId?: string;
   readonly tags?: readonly string[];
   readonly stages: readonly StageInput[];
 }
@@ -118,9 +110,14 @@ export interface Pause {
 
 export interface RequirementStatus {
   readonly id: string;
+  readonly kind: RequirementKind;
   readonly title: RequirementSpec['title'];
-  readonly beforePhase: Phase;
+  readonly revision: number;
+  /** The app shows it now: its showAt phase is reached. */
+  readonly visible: boolean;
+  readonly beforePhase?: Phase;
   readonly strictness: 'block' | 'warn';
+  /** For kind = info always true. */
   readonly fulfilled: boolean;
   readonly have: number;
   readonly need: number;
@@ -129,15 +126,6 @@ export interface RequirementStatus {
   readonly violated: boolean;
   /** The stage was left without the work, so the requirement did not apply. */
   readonly notApplicable: boolean;
-}
-
-export interface InstructionStatus {
-  readonly id: string;
-  readonly revision: number;
-  /** The app shows it now (its show_at phase is reached). */
-  readonly visible: boolean;
-  /** Acknowledged in its current revision (only for instructions that require it). */
-  readonly acknowledged?: boolean;
 }
 
 export interface StageResult {
@@ -155,7 +143,6 @@ export interface StageResult {
   /** Sum of closed pauses, milliseconds. */
   readonly pausedMs: number;
   readonly requirements: readonly RequirementStatus[];
-  readonly instructions: readonly InstructionStatus[];
 }
 
 export interface IncidentResult {

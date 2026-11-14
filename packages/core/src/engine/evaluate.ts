@@ -9,8 +9,7 @@ import type { Catalog } from '../catalog/types.js';
 import { deriveTripState } from '../machines/trip-state.js';
 import { HANDLERS } from './handlers/index.js';
 import { reject, type Outcome } from './handlers/context.js';
-import { isInstructionVisible } from './instructions.js';
-import { isFulfilled, measure } from './requirements.js';
+import { isFulfilled, isVisible, measure, strictnessOf } from './requirements.js';
 import { createRun, currentStage, findStage, type StageRun, type TripRun } from './run.js';
 import type { EventInput, EventResult, StageResult, TripInput, TripResult } from './types.js';
 
@@ -83,24 +82,18 @@ function stageResult(stage: StageRun): StageResult {
       const m = measure(stage, r.spec);
       return {
         id: r.spec.id,
+        kind: r.spec.kind,
         title: r.spec.title,
-        beforePhase: r.spec.beforePhase,
-        strictness: r.spec.strictness,
+        revision: r.spec.revision ?? 1,
+        visible: isVisible(r.spec.showAt, stage.phase),
+        ...(r.spec.beforePhase ? { beforePhase: r.spec.beforePhase } : {}),
+        strictness: strictnessOf(r.spec),
         fulfilled: r.waived || isFulfilled(m),
         have: m.have,
         need: m.need,
         waived: r.waived,
         violated: r.violated,
         notApplicable: r.notApplicable === true,
-      };
-    }),
-    instructions: (stage.input.instructions ?? []).map((i) => {
-      const ack = stage.requirements.find((r) => r.spec.instructionId === i.id);
-      return {
-        id: i.id,
-        revision: i.revision,
-        visible: isInstructionVisible(i.showAt, stage.phase),
-        ...(ack ? { acknowledged: isFulfilled(measure(stage, ack.spec)) } : {}),
       };
     }),
   };

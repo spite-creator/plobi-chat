@@ -4,5 +4,5 @@
  */
 export * from '../modules/identity/schema.js';
 export * from '../modules/catalog/schema.js';
-export * from '../modules/directory/schema.js';
+export * from '../modules/places/schema.js';
 export * from '../modules/trips/schema.js';

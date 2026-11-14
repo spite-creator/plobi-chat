@@ -58,19 +58,12 @@ IncidentType                    # поломка, ДТП, повреждение
   blocks_progress: bool         # нельзя «Убыл», пока открыт
   auto_pause: bool              # активный этап in_progress → paused
 
-RequirementTemplate             # шаблон требования (справочник)
-  code, title, instructions
-  kind: photo | document | signature | scan | number | text | checklist | event
-  min?, max?, source: camera | camera_or_gallery
-  event_type?                   # для kind = event
-  before_phase                  # до какой фазы должно быть выполнено
-  capture_window_from_phase?    # засчитывается собранное начиная с этой фазы
-  strictness: block | warn
-  waivable: bool
+RequirementTemplate             # требование по умолчанию (справочник), поля как у StageRequirement
+  code, ...
 
-RequirementRule                 # когда шаблон применяется автоматически
+RequirementRule                 # к каким этапам требование по умолчанию добавляется само
   requirement_template_id
-  ...RuleScope                  # «у всех погрузок» / «#reefer» / «клиент X» / «склад Y»
+  stage_types[], tags_required[]   # «у всех погрузок» / «у погрузок рейсов с #reefer»
 ```
 
 Подробнее о событиях и требованиях: [events-and-requirements.md](events-and-requirements.md).
@@ -103,7 +96,6 @@ RequirementRule                 # когда шаблон применяется
 Trip
   id, external_id, number
   state: draft | assigned | accepted | in_progress | finished | closed | cancelled
-  customer_id?
   tags[]                                        # #reefer, #adr, #customs ...
   driver_id, co_driver_id?, dispatcher_id
   vehicle {plate, model}, trailer {plate}       # пока свободные поля, справочник ТС потом
@@ -131,7 +123,7 @@ Stage                                           # этап: точка или т
   # для transit:
   planned_distance_km?, carrier_ref?            # например, судно и рейс парома
   eta?                                          # последнее ETA из событий
-  instructions[]                                # StageInstruction, см. ниже
+  requirements[]                                # StageRequirement, см. ниже
   custom_fields: JSONB
 
 Incident                                        # параллельный инцидент
@@ -140,17 +132,25 @@ Incident                                        # параллельный ин�
   opened_by_event_id, closed_by_event_id?
   blocks_progress: bool
 
-StageRequirement                                # требование на конкретном этапе
-  id, stage_id, requirement_template_id?        # пусто — разовое требование из API / от диспетчера
-  source: stage_type | tag_rule | manual
-  ...поля шаблона (копия, можно править для этого этапа)
-  state: pending | fulfilled | waived | violated
-  evidence[]                                    # какие вложения / события его закрыли
-  waived_by?, waive_reason?
+StageRequirement                                # что водитель видит и делает на этапе
+  id, source: stage_type | tag_rule | manual     # manual — пришло вместе с этапом (API / диспетчер)
+  template?
+  title
+  kind: info | acknowledgement | photo | video | document | signature
+        | scan | number | text | checklist | event
+  text?, contact?, location?, attachment_ids[]?, url?   # пояснение
+  show_at: always | arrived | started | completed
+  before_phase?                                 # до какой фазы выполнить (не для info)
+  min?, capture_from_phase?, camera_only?, event_type?, value_key?
+  strictness: block | warn, waivable
+  revision                                      # «Ознакомлен» засчитывается только для текущей
+  # вычисляется из журнала: visible, fulfilled, have / need, waived, violated, not_applicable
 ```
 
-Требования копируются на этап при создании рейса (по типу этапа и по
-правилам тегов) и дальше живут на этапе. Событие фазы недоступно, пока не
+Подробнее: [events-and-requirements.md](events-and-requirements.md#3-требования-этапа).
+
+Требования по умолчанию копируются на этап при создании рейса, рядом с
+теми, что пришли вместе с этапом, и дальше живут на этапе. Событие фазы недоступно, пока не
 выполнены требования `block` до этой фазы. Водитель без связи может пройти с
 нарушением (`requirements_unmet`). Диспетчер может снять требование или
 выставить событие принудительно; оба действия фиксируются в журнале с
@@ -181,36 +181,16 @@ Event
 События не редактируются и не удаляются: это журнал. Ошибочное событие
 отменяется новым событием `cancelled_event` со ссылкой на исходное.
 
-## Места и инструкции
+## Места
 
-Подробно: [places-and-instructions.md](places-and-instructions.md).
+Подробно: [places.md](places.md).
 
 ```
 Place
   id, external_id, name, kind?
   address, lat, lon, timezone, working_hours?
   contacts[] { name, phone, role }
-  instructions[]                # постоянные, копируются в каждый этап на это место
   tags[]
-
-Customer                        # клиент: заказчик, грузоотправитель, грузополучатель
-  id, external_id, name, contacts[]
-  # требования клиента = правила с условием customers = [id], редактируются в карточке клиента
-
-RuleScope                       # общие условия правил требований и инструкций
-  stage_types[], tags_required[], customers[], places[]
-
-InstructionRule                 # инструкция по правилу (RuleScope + instruction)
-  code, ...RuleScope, instruction
-
-StageInstruction                # инструкция на конкретном этапе
-  id
-  kind: text | contact | photo | location | file | voice | link
-  text?, contact?, lat?, lon?, attachment_id?, url?
-  show_at: always | arrived | started | completed
-  ack_before_phase?             # включает требование «ознакомлен»
-  revision                      # растёт при каждом изменении
-  source: place | instruction_rule | manual
 ```
 
 ## Чаты

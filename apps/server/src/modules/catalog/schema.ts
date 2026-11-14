@@ -6,7 +6,6 @@ export const CATALOG_KINDS = [
   'incident_type',
   'requirement_template',
   'requirement_rule',
-  'instruction_rule',
 ] as const;
 export type CatalogKind = (typeof CATALOG_KINDS)[number];
 

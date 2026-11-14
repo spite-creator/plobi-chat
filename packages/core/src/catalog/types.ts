@@ -5,7 +5,6 @@
  */
 import type { Phase, Profile } from '../machines/phase.js';
 import type { StageState } from '../machines/stage-state.js';
-import type { RuleScope } from './rule-scope.js';
 
 export type StageKind = 'point' | 'transit';
 export type TransitMode = 'road' | 'ferry' | 'rail';
@@ -101,7 +100,13 @@ export interface IncidentType {
   readonly severity: 'warning' | 'critical';
 }
 
+/**
+ * Kinds of requirements. A requirement is one item on a stage that the driver
+ * sees and works with: just read it, acknowledge it, or provide something.
+ */
 export const REQUIREMENT_KINDS = [
+  'info', // read: "Call Ashot, he opens the gate"
+  'acknowledgement', // read and confirm "Acknowledged": "No more than 2 tiers"
   'photo',
   'video',
   'document',
@@ -111,15 +116,30 @@ export const REQUIREMENT_KINDS = [
   'text',
   'checklist',
   'event',
-  'acknowledgement',
 ] as const;
 export type RequirementKind = (typeof REQUIREMENT_KINDS)[number];
 
-/** Something that must be collected on a stage before it enters a phase. */
-export interface RequirementSpec {
-  readonly title: LocalizedText;
+/** When the app shows a requirement: from assignment, or from reaching a phase. */
+export const SHOW_AT = ['always', 'arrived', 'started', 'completed'] as const;
+export type ShowAt = (typeof SHOW_AT)[number];
+
+/** What is shown to the driver with a requirement, besides its title. */
+export interface RequirementContent {
+  readonly text?: LocalizedText | string;
+  readonly contact?: { readonly name: string; readonly phone: string; readonly role?: string };
+  readonly location?: { readonly lat: number; readonly lon: number };
+  /** Photos of the gate, a route scheme, a voice note... */
+  readonly attachmentIds?: readonly string[];
+  readonly url?: string;
+}
+
+export interface RequirementSpec extends RequirementContent {
+  readonly title: LocalizedText | string;
   readonly kind: RequirementKind;
-  readonly beforePhase: Phase;
+  /** Default: always. */
+  readonly showAt?: ShowAt;
+  /** Must be fulfilled before the stage enters this phase. Not used for kind = info. */
+  readonly beforePhase?: Phase;
   /** Evidence counts only if captured after this phase was reached. */
   readonly captureFromPhase?: Phase;
   readonly min?: number;
@@ -128,52 +148,21 @@ export interface RequirementSpec {
   readonly eventType?: string;
   /** kind = scan | number | text | checklist: the event value key that holds it. */
   readonly valueKey?: string;
-  /** kind = acknowledgement: the instruction and the revision that must be acknowledged. */
-  readonly instructionId?: string;
-  readonly instructionRevision?: number;
-  readonly strictness: 'block' | 'warn';
-  readonly waivable: boolean;
-  readonly instructions?: LocalizedText;
+  /** Default: block. */
+  readonly strictness?: 'block' | 'warn';
+  /** Default: true. */
+  readonly waivable?: boolean;
 }
 
 export interface RequirementTemplate extends RequirementSpec {
   readonly code: string;
 }
 
-/** When a template is attached to stages automatically (stage type, tags, customer, place). */
-export interface RequirementRule extends RuleScope {
+/** Default requirements: added to every stage of these types (optionally only with these tags). */
+export interface RequirementRule {
   readonly template: string;
-}
-
-export const INSTRUCTION_KINDS = ['text', 'contact', 'photo', 'location', 'file', 'voice', 'link'] as const;
-export type InstructionKind = (typeof INSTRUCTION_KINDS)[number];
-
-/** When the app shows an instruction: from assignment, or from reaching a phase. */
-export type InstructionShowAt = 'always' | 'arrived' | 'started' | 'completed';
-
-/** What the driver must know (a requirement is what the driver must do). */
-export interface InstructionContent {
-  readonly kind: InstructionKind;
-  readonly text?: LocalizedText | string;
-  readonly contact?: { readonly name: string; readonly phone: string; readonly role?: string };
-  readonly location?: { readonly lat: number; readonly lon: number };
-  readonly attachmentId?: string;
-  readonly url?: string;
-  readonly showAt: InstructionShowAt;
-  /** Requires "Acknowledged" before this phase. */
-  readonly ackBeforePhase?: Phase;
-}
-
-export interface InstructionRule extends RuleScope {
-  readonly code: string;
-  readonly instruction: InstructionContent;
-}
-
-/** A place a stage refers to: warehouse, customer, customs post, port. */
-export interface Place {
-  readonly id: string;
-  readonly name: string;
-  readonly instructions?: ReadonlyArray<InstructionContent & { readonly id: string }>;
+  readonly stageTypes?: readonly string[];
+  readonly tagsRequired?: readonly string[];
 }
 
 export interface Catalog {
@@ -182,5 +171,4 @@ export interface Catalog {
   readonly incidentTypes: Readonly<Record<string, IncidentType>>;
   readonly requirementTemplates: Readonly<Record<string, RequirementTemplate>>;
   readonly requirementRules: readonly RequirementRule[];
-  readonly instructionRules: readonly InstructionRule[];
 }

@@ -14,13 +14,11 @@ const StageBody = Type.Object({
   tags: Type.Optional(Type.Array(Type.String())),
   details: Type.Optional(Loose),
   requirements: Type.Optional(Type.Array(Loose)),
-  instructions: Type.Optional(Type.Array(Loose)),
 });
 
 const TripBody = Type.Object({
   number: Type.String({ minLength: 1 }),
   externalId: Type.Optional(Type.String()),
-  customer: Type.Optional(Ref),
   driver: Type.Optional(Ref),
   tags: Type.Optional(Type.Array(Type.String())),
   vehicle: Type.Optional(Loose),
@@ -67,7 +65,7 @@ export function tripRoutes(service: TripService): FastifyPluginAsyncTypebox {
       async (req) => service.listTrips(currentUser(req), req.query.state ? { state: req.query.state } : {}),
     );
 
-    /** A whole trip in one request: points with places, requirements and instructions. Transits are inserted. */
+    /** A whole trip in one request: points with places and requirements. Transits are inserted. */
     app.post('/trips', { schema: { tags: ['trips'], body: TripBody } }, async (req, reply) => {
       requireRole(req, 'admin', 'dispatcher');
       return reply.status(201).send(await service.createTrip(req.body as CreateTripInput));

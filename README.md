@@ -26,7 +26,7 @@
 - [Архитектура и развёртывание](docs/architecture.md)
 - [Этапы: состояние, фаза и автоматы](docs/state-machine.md)
 - [События и требования](docs/events-and-requirements.md)
-- [Места, клиенты и инструкции](docs/places-and-instructions.md)
+- [Места](docs/places.md)
 - [Модель данных](docs/domain-model.md)
 - [API](docs/api.md)
 - [Базовые справочники этапов и событий](docs/base-catalog.md)
@@ -59,8 +59,8 @@ pnpm test                   # ядро и сервер (серверу нужн�
 ## Структура
 
 ```
-packages/core   ядро: автоматы, ярлыки, требования, инструкции (без БД и сети)
-apps/server     сервер: модули identity, catalog, directory, trips, automata
+packages/core   ядро: автоматы, ярлыки, требования (без БД и сети)
+apps/server     сервер: модули identity, catalog, places, trips, automata
 docs/           документация продукта
 ```
 

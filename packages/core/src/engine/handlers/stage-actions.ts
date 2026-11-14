@@ -2,6 +2,7 @@
  * Detail, skip and waive: events that act on a stage without moving its phase.
  */
 import { canSkip } from '../../machines/stage-state.js';
+import { isWaivable } from '../requirements.js';
 import { skipStage } from '../run.js';
 import {
   checkEventScope,
@@ -67,7 +68,7 @@ export const waiveHandler: Handler = (ctx) => {
   const requirement = stage.requirements.find((r) => r.spec.id === requirementId);
   if (ctx.mode === 'apply') {
     if (!requirement) return reject('requirement_not_found', [String(requirementId)]);
-    if (!requirement.spec.waivable) return reject('out_of_scope', ['not_waivable']);
+    if (!isWaivable(requirement.spec)) return reject('out_of_scope', ['not_waivable']);
   }
 
   const reason = checkReason(ctx);

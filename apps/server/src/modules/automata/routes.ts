@@ -7,7 +7,6 @@ import {
   describeMachines,
   evaluateTrip,
   insertTransits,
-  materializeInstructions,
   materializeRequirements,
   phaseDiagram,
   PROFILES,
@@ -23,8 +22,7 @@ import type { CatalogService } from '../catalog/service.js';
 
 const SimulateBody = Type.Object({
   tags: Type.Optional(Type.Array(Type.String())),
-  customerId: Type.Optional(Type.String()),
-  /** Points only; transits, requirements and instructions are added like for a real trip. */
+  /** Points only; transits and default requirements are added like for a real trip. */
   stages: Type.Array(
     Type.Object({ id: Type.String(), typeCode: Type.String(), tags: Type.Optional(Type.Array(Type.String())) }),
     { minItems: 1 },
@@ -62,10 +60,10 @@ export function automataRoutes(catalog: CatalogService): FastifyPluginAsyncTypeb
     app.post('/simulate', { schema: { tags: ['automata'], body: SimulateBody } }, async (req) => {
       requireRole(req, 'admin', 'dispatcher');
       const cat = await catalog.get();
-      const trip = { tags: req.body.tags ?? [], ...(req.body.customerId ? { customerId: req.body.customerId } : {}) };
+      const trip = { tags: req.body.tags ?? [] };
       const stages: StageInput[] = insertTransits(req.body.stages, cat).map((s) =>
         cat.stageTypes[s.typeCode]?.kind === 'point'
-          ? { ...s, requirements: materializeRequirements(s, trip, cat), instructions: materializeInstructions(s, trip, cat) }
+          ? { ...s, requirements: materializeRequirements(s, trip, cat) }
           : s,
       );
       return evaluateTrip({ id: 'simulation', ...trip, stages }, req.body.events as unknown as EventInput[], cat);

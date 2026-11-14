@@ -6,7 +6,6 @@ let dispatcher: Api;
 let driver: { id: string; api: Api };
 let otherDriver: { id: string; api: Api };
 let placeId: string;
-let customerId: string;
 
 beforeAll(async () => {
   admin = await startApp();
@@ -22,23 +21,15 @@ beforeAll(async () => {
       lat: 55.75,
       lon: 37.61,
       timezone: 'Europe/Moscow',
-      instructions: [{ id: 'gate', kind: 'text', text: 'Позвони Ашоту, он откроет ворота', showAt: 'arrived' }],
     })
   ).body.id;
-
-  customerId = (await dispatcher.post('/customers', { name: 'ООО Клиент', externalId: 'C-1' })).body.id;
-  const rules = await dispatcher.put(`/customers/${customerId}/rules`, {
-    requirements: [],
-    instructions: [
-      {
-        code: 'tiers',
-        stageTypes: ['loading'],
-        instruction: { kind: 'text', text: 'Не более 2 ярусов', showAt: 'arrived', ackBeforePhase: 'started' },
-      },
-    ],
-  });
-  expect(rules.status).toBe(200);
 });
+
+/** Requirements sent with the stage: what the driver must see and do there. */
+const LOADING_REQUIREMENTS = [
+  { kind: 'info', title: 'Позвони Ашоту, он откроет ворота', contact: { name: 'Ашот', phone: '+7 900 000-00-00' }, showAt: 'arrived' },
+  { kind: 'acknowledgement', title: 'Не более 2 ярусов', showAt: 'arrived', beforePhase: 'started' },
+];
 
 afterAll(async () => {
   await admin.app.close();
@@ -47,10 +38,14 @@ afterAll(async () => {
 async function createTrip(extra: Record<string, unknown> = {}) {
   const res = await dispatcher.post('/trips', {
     number: `R-${Math.random().toString(36).slice(2, 7)}`,
-    customer: { externalId: 'C-1' },
     driver: { id: driver.id },
     stages: [
-      { type: 'loading', place: { externalId: 'WH-NORTH' }, details: { windowFrom: '2026-11-20T06:00:00Z' } },
+      {
+        type: 'loading',
+        place: { externalId: 'WH-NORTH' },
+        details: { windowFrom: '2026-11-20T06:00:00Z' },
+        requirements: LOADING_REQUIREMENTS,
+      },
       { type: 'unloading', details: { address: 'Warszawa, Magazynowa 5', timezone: 'Europe/Warsaw' } },
     ],
     ...extra,
@@ -68,7 +63,7 @@ const event = (typeCode: string, stageId?: string, extra: Record<string, unknown
 });
 
 describe('creating a trip', () => {
-  it('inserts the transit and brings place, customer and catalog into the stages', async () => {
+  it('inserts the transit; a stage gets its defaults plus the requirements sent with it', async () => {
     const trip = await createTrip();
     expect(trip.stages.map((s: any) => [s.typeCode, s.isAuto])).toEqual([
       ['loading', false],
@@ -78,19 +73,26 @@ describe('creating a trip', () => {
     const loading = trip.stages[0];
     expect(loading.placeId).toBe(placeId);
     expect(loading.details.address).toBe('Москва, Складская 1');
-    expect(loading.instructions.map((i: any) => [i.source, i.text])).toEqual([
-      ['place', 'Позвони Ашоту, он откроет ворота'],
-      ['customer', 'Не более 2 ярусов'],
+    expect(loading.requirements.map((r: any) => [r.source, r.kind, r.template ?? r.title])).toEqual([
+      ['stage_type', 'photo', 'loading_process_photos'],
+      ['stage_type', 'scan', 'seal_number'],
+      ['stage_type', 'photo', 'seal_photo'],
+      ['stage_type', 'document', 'cmr_signed'],
+      ['manual', 'info', 'Позвони Ашоту, он откроет ворота'],
+      ['manual', 'acknowledgement', 'Не более 2 ярусов'],
     ]);
-    expect(loading.requirements.map((r: any) => r.template ?? r.source)).toEqual(
-      expect.arrayContaining(['loading_process_photos', 'cmr_signed', 'instruction']),
-    );
+    expect(loading.requirements[4]).toMatchObject({ visible: false, fulfilled: true, contact: { name: 'Ашот' } });
     expect(trip.state).toBe('assigned');
   });
 
-  it('refuses an unknown stage type and a duplicate external id', async () => {
+  it('refuses an unknown stage type, a malformed requirement and a duplicate external id', async () => {
     const bad = await dispatcher.post('/trips', { number: 'X', stages: [{ type: 'teleport' }] });
     expect(bad.body.code).toBe('unknown_stage_type');
+    const noPhase = await dispatcher.post('/trips', {
+      number: 'X',
+      stages: [{ type: 'loading', requirements: [{ kind: 'photo', title: 'Фото' }] }],
+    });
+    expect(noPhase.body.code).toBe('invalid_requirement');
     await createTrip({ externalId: '1C-77' });
     const dup = await dispatcher.post('/trips', { number: 'Y', externalId: '1C-77', stages: [{ type: 'waypoint' }] });
     expect(dup.status).toBe(409);
@@ -110,16 +112,16 @@ describe('the event journal online', () => {
   it('runs a loading: acknowledgement, requirements, departure starts the transit', async () => {
     const trip = await createTrip();
     const load = trip.stages[0].id;
-    const ack = trip.stages[0].instructions.find((i: any) => i.source === 'customer');
+    const ack = trip.stages[0].requirements.find((r: any) => r.kind === 'acknowledgement');
 
     expect((await driver.api.post(`/trips/${trip.id}/events`, event('arrived', load))).status).toBe(201);
 
-    // Customer instruction must be acknowledged before work starts.
+    // "No more than 2 tiers" must be acknowledged before work starts.
     const early = await driver.api.post(`/trips/${trip.id}/events`, event('loading_started', load));
     expect(early.status).toBe(409);
-    expect(early.body.details).toEqual({ reason: 'requirements_unmet', details: [`${ack.id}:ack`] });
+    expect(early.body.details).toEqual({ reason: 'requirements_unmet', details: [ack.id] });
 
-    await driver.api.post(`/trips/${trip.id}/events`, event('instruction_acknowledged', load, { values: { instructionId: ack.id, revision: 1 } }));
+    await driver.api.post(`/trips/${trip.id}/events`, event('acknowledged', load, { values: { requirementId: ack.id, revision: 1 } }));
     await driver.api.post(`/trips/${trip.id}/events`, event('loading_started', load));
     await driver.api.post(`/trips/${trip.id}/events`, event('loaded', load));
 
@@ -205,7 +207,7 @@ describe('offline sync', () => {
     const full = (await dispatcher.get(`/trips/${trip.id}`)).body;
     expect(full.journal).toHaveLength(4);
     expect(full.stages.map((s: any) => s.state)).toEqual(['passed', 'passed', 'in_progress']);
-    expect(full.stages[0].requirements.every((r: any) => r.notApplicable || r.source === 'instruction')).toBe(true);
+    expect(full.stages[0].requirements.filter((r: any) => r.kind !== 'info').every((r: any) => r.notApplicable)).toBe(true);
   });
 
   it('a retried batch does not duplicate anything', async () => {

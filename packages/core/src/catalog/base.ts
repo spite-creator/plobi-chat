@@ -8,7 +8,6 @@ import type {
   EventScope,
   EventType,
   IncidentType,
-  InstructionRule,
   RequirementRule,
   RequirementTemplate,
   StageType,
@@ -174,8 +173,8 @@ const EVENT_TYPES: EventType[] = [
     { key: 'temperature', kind: 'number', required: true },
     photos(1, false),
   ]),
-  detail('instruction_acknowledged', 'Ознакомлен', { states: ['ahead', 'in_progress'] }, [
-    { key: 'instructionId', kind: 'text', required: true },
+  detail('acknowledged', 'Ознакомлен', { states: ['ahead', 'in_progress'] }, [
+    { key: 'requirementId', kind: 'text', required: true },
     { key: 'revision', kind: 'number', required: true },
   ]),
   detail('fuel_receipt', 'Заправка', { kinds: ['transit'] }, [
@@ -227,6 +226,8 @@ const REQUIREMENT_TEMPLATES: RequirementTemplate[] = [
   { code: 'trailer_photos', title: ru('Фото прицепа со всех сторон'), kind: 'photo', min: 4, cameraOnly: true, beforePhase: 'departed', strictness: 'block', waivable: true },
   { code: 'ferry_ticket', title: ru('Фото билета / брони'), kind: 'photo', beforePhase: 'started', strictness: 'warn', waivable: true },
   { code: 'reefer_temperature', title: ru('Температура рефа'), kind: 'number', valueKey: 'temperature', beforePhase: 'departed', strictness: 'block', waivable: true },
+  { code: 'adr_parking', title: ru('Опасный груз: не останавливаться у жилых домов и АЗС'), kind: 'acknowledgement', beforePhase: 'arrived', strictness: 'block', waivable: true },
+  { code: 'reefer_check', title: ru('Проверьте, что реф включён и выставлена температура по заявке'), kind: 'acknowledgement', showAt: 'arrived', beforePhase: 'started', strictness: 'block', waivable: true },
   { code: 'clean_body_photo', title: ru('Фото чистого пустого кузова'), kind: 'photo', cameraOnly: true, beforePhase: 'started', strictness: 'block', waivable: true },
 ];
 
@@ -243,22 +244,8 @@ const REQUIREMENT_RULES: RequirementRule[] = [
   { template: 'ferry_ticket', stageTypes: ['ferry_port_departure'] },
   { template: 'reefer_temperature', stageTypes: ['loading'], tagsRequired: ['reefer'] },
   { template: 'clean_body_photo', stageTypes: ['loading'], tagsRequired: ['food'] },
-];
-
-// ---------- instructions ----------
-
-const INSTRUCTION_RULES: InstructionRule[] = [
-  {
-    code: 'adr_parking',
-    tagsRequired: ['adr'],
-    instruction: { kind: 'text', text: ru('Опасный груз: не останавливаться у жилых домов и АЗС'), showAt: 'always', ackBeforePhase: 'arrived' },
-  },
-  {
-    code: 'reefer_check',
-    stageTypes: ['loading'],
-    tagsRequired: ['reefer'],
-    instruction: { kind: 'text', text: ru('Проверьте, что реф включён и выставлена температура по заявке'), showAt: 'arrived', ackBeforePhase: 'started' },
-  },
+  { template: 'adr_parking', tagsRequired: ['adr'] },
+  { template: 'reefer_check', stageTypes: ['loading'], tagsRequired: ['reefer'] },
 ];
 
 export const BASE_CATALOG: Catalog = {
@@ -267,5 +254,4 @@ export const BASE_CATALOG: Catalog = {
   incidentTypes: byCode(INCIDENT_TYPES),
   requirementTemplates: byCode(REQUIREMENT_TEMPLATES),
   requirementRules: REQUIREMENT_RULES,
-  instructionRules: INSTRUCTION_RULES,
 };

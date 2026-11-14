@@ -6,17 +6,13 @@
  * simply takes its place in time and everything is recomputed.
  */
 import {
-  acknowledgementRequirements,
   availableEvents,
   evaluateTrip,
-  type InstructionStatus,
   type RequirementStatus,
-  type StageInstruction,
   type StageRequirement,
   type Attachment,
   type EventInput,
   type EventResult,
-  type Place,
   type StageResult,
   type TripInput,
   type TripResult,
@@ -26,7 +22,7 @@ import type { Db, Tx } from '../../platform/db.js';
 import { conflict, notFound } from '../../platform/errors.js';
 import type { EventBus } from '../../platform/event-bus.js';
 import type { CatalogService } from '../catalog/service.js';
-import type { DirectoryService, Ref } from '../directory/service.js';
+import type { PlaceService, Ref } from '../places/service.js';
 import type { AuthUser, IdentityService } from '../identity/service.js';
 import { assertCanSee, assertCanSubmit, canSeeTrip, engineRole } from './access.js';
 import { assembleStages, type IncomingStage } from './assemble.js';
@@ -39,7 +35,6 @@ type EventRow = typeof tripEvents.$inferSelect;
 export interface CreateTripInput {
   externalId?: string;
   number: string;
-  customer?: Ref;
   driver?: Ref;
   tags?: string[];
   vehicle?: Record<string, unknown>;
@@ -60,7 +55,7 @@ export interface SubmittedEvent {
 }
 
 /** A stage as the apps see it: stored description plus computed state. */
-export interface StageView extends Omit<StageResult, 'requirements' | 'instructions'> {
+export interface StageView extends Omit<StageResult, 'requirements'> {
   seq: number;
   externalId: string | null;
   placeId: string | null;
@@ -68,17 +63,12 @@ export interface StageView extends Omit<StageResult, 'requirements' | 'instructi
   isAuto: boolean;
   tags: string[];
   details: StageRow['details'];
-  /** What is required (spec) and how far it is (status). */
-  requirements: Array<Partial<StageRequirement> & RequirementStatus>;
-  /** What the driver must know (content) and whether it is shown / acknowledged. */
-  instructions: Array<StageInstruction & InstructionStatus>;
+  /** What the driver sees and does (spec) and how far it is (status). */
+  requirements: Array<StageRequirement & RequirementStatus>;
 }
 
 function stageView(row: StageRow, result: StageResult): StageView {
-  const specs = new Map(
-    [...row.requirements, ...acknowledgementRequirements(row.instructions)].map((r) => [r.id, r] as const),
-  );
-  const contents = new Map(row.instructions.map((i) => [i.id, i] as const));
+  const specs = new Map(row.requirements.map((r) => [r.id, r] as const));
   return {
     ...result,
     seq: row.seq,
@@ -88,8 +78,7 @@ function stageView(row: StageRow, result: StageResult): StageView {
     isAuto: row.isAuto,
     tags: row.tags,
     details: row.details,
-    requirements: result.requirements.map((status) => ({ ...specs.get(status.id), ...status })),
-    instructions: result.instructions.map((status) => ({ ...(contents.get(status.id) as StageInstruction), ...status })),
+    requirements: result.requirements.map((status) => ({ ...(specs.get(status.id) as StageRequirement), ...status })),
   };
 }
 
@@ -97,7 +86,6 @@ export interface TripView {
   id: string;
   externalId: string | null;
   number: string;
-  customerId: string | null;
   driverId: string | null;
   tags: string[];
   vehicle: Record<string, unknown>;
@@ -121,7 +109,6 @@ interface Loaded {
 const toTripInput = ({ trip, stages: rows }: Pick<Loaded, 'trip' | 'stages'>): TripInput => ({
   id: trip.id,
   ...(trip.driverId ? { driverId: trip.driverId } : {}),
-  ...(trip.customerId ? { customerId: trip.customerId } : {}),
   tags: trip.tags,
   stages: rows.map((s) => ({
     id: s.id,
@@ -129,8 +116,6 @@ const toTripInput = ({ trip, stages: rows }: Pick<Loaded, 'trip' | 'stages'>): T
     isAuto: s.isAuto,
     tags: s.tags,
     requirements: s.requirements,
-    instructions: s.instructions,
-    ...(s.placeId ? { placeId: s.placeId } : {}),
     ...(s.assigneeId ? { assigneeId: s.assigneeId } : {}),
   })),
 });
@@ -159,7 +144,7 @@ export class TripService {
     private readonly db: Db,
     private readonly bus: EventBus,
     private readonly catalog: CatalogService,
-    private readonly directory: DirectoryService,
+    private readonly places: PlaceService,
     private readonly identity: IdentityService,
   ) {}
 
@@ -167,14 +152,12 @@ export class TripService {
 
   async createTrip(input: CreateTripInput): Promise<TripView> {
     const catalog = await this.catalog.get();
-    const customerId = input.customer ? (await this.directory.findCustomer(input.customer)).id : undefined;
     const driverId = input.driver ? (await this.identity.findUser(input.driver)).id : undefined;
 
-    const places = new Map<string, Place>();
     const incoming: IncomingStage[] = [];
     for (const { place, ...stage } of input.stages) {
-      const row = place ? await this.directory.findPlace(place) : undefined;
-      if (row) places.set(row.id, this.directory.toCorePlace(row));
+      // The place gives address, coordinates and time zone; the stage may override them.
+      const row = place ? await this.places.find(place) : undefined;
       incoming.push({
         ...stage,
         ...(row ? { placeId: row.id } : {}),
@@ -186,7 +169,7 @@ export class TripService {
         },
       });
     }
-    const records = assembleStages(incoming, { catalog, tripTags: input.tags ?? [], customerId, places });
+    const records = assembleStages(incoming, { catalog, tripTags: input.tags ?? [] });
 
     const tripId = await this.db.transaction(async (tx) => {
       if (input.externalId) {
@@ -198,7 +181,6 @@ export class TripService {
         .values({
           number: input.number,
           externalId: input.externalId ?? null,
-          customerId: customerId ?? null,
           driverId: driverId ?? null,
           tags: input.tags ?? [],
           vehicle: input.vehicle ?? {},
@@ -220,7 +202,6 @@ export class TripService {
           tags: [...(r.tags ?? [])],
           details: r.details,
           requirements: r.requirements,
-          instructions: r.instructions,
         })),
       );
       return id;
@@ -387,7 +368,6 @@ export class TripService {
       id: trip.id,
       externalId: trip.externalId,
       number: trip.number,
-      customerId: trip.customerId,
       driverId: trip.driverId,
       tags: trip.tags,
       vehicle: trip.vehicle,

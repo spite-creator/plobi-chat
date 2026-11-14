@@ -8,32 +8,6 @@ CREATE TABLE "catalog_items" (
 	CONSTRAINT "catalog_items_kind_code_pk" PRIMARY KEY("kind","code")
 );
 --> statement-breakpoint
-CREATE TABLE "customers" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"external_id" text,
-	"name" text NOT NULL,
-	"contacts" jsonb DEFAULT '[]'::jsonb NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "customers_external_id_unique" UNIQUE("external_id")
-);
---> statement-breakpoint
-CREATE TABLE "places" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"external_id" text,
-	"name" text NOT NULL,
-	"kind" text,
-	"address" text,
-	"lat" double precision,
-	"lon" double precision,
-	"timezone" text,
-	"working_hours" text,
-	"contacts" jsonb DEFAULT '[]'::jsonb NOT NULL,
-	"instructions" jsonb DEFAULT '[]'::jsonb NOT NULL,
-	"tags" text[] DEFAULT '{}' NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "places_external_id_unique" UNIQUE("external_id")
-);
---> statement-breakpoint
 CREATE TABLE "sessions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"user_id" uuid NOT NULL,
@@ -60,6 +34,22 @@ CREATE TABLE "users" (
 	CONSTRAINT "users_login_unique" UNIQUE("login")
 );
 --> statement-breakpoint
+CREATE TABLE "places" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"external_id" text,
+	"name" text NOT NULL,
+	"kind" text,
+	"address" text,
+	"lat" double precision,
+	"lon" double precision,
+	"timezone" text,
+	"working_hours" text,
+	"contacts" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"tags" text[] DEFAULT '{}' NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "places_external_id_unique" UNIQUE("external_id")
+);
+--> statement-breakpoint
 CREATE TABLE "stages" (
 	"id" text PRIMARY KEY NOT NULL,
 	"trip_id" uuid NOT NULL,
@@ -71,8 +61,7 @@ CREATE TABLE "stages" (
 	"is_auto" boolean DEFAULT false NOT NULL,
 	"tags" text[] DEFAULT '{}' NOT NULL,
 	"details" jsonb DEFAULT '{}'::jsonb NOT NULL,
-	"requirements" jsonb DEFAULT '[]'::jsonb NOT NULL,
-	"instructions" jsonb DEFAULT '[]'::jsonb NOT NULL
+	"requirements" jsonb DEFAULT '[]'::jsonb NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "trip_events" (
@@ -95,7 +84,6 @@ CREATE TABLE "trips" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"external_id" text,
 	"number" text NOT NULL,
-	"customer_id" uuid,
 	"driver_id" uuid,
 	"dispatcher_id" uuid,
 	"tags" text[] DEFAULT '{}' NOT NULL,
