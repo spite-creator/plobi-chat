@@ -91,7 +91,7 @@
 | `missed_departure` | Не попал на рейс | · arrived | новый рейс, ETA |
 | `boarding` | Посадка | → started | — |
 | `on_board` | На борту | → departed | — |
-| `disembarked` | Съехал с парома | → departed (порт прибытия) | — |
+| `disembarked` | Съехал с парома | → arrived (порт прибытия: завершает транзит-паром) | — |
 
 ### Отцепка / сцепка / смена водителя
 

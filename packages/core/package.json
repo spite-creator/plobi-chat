@@ -1,0 +1,16 @@
+{
+  "name": "@plobi/core",
+  "version": "0.1.0",
+  "description": "Plobi domain core: stage state and phase machines, event scope labels, requirements. Pure, shared by server and PWA.",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}
