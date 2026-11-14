@@ -38,9 +38,9 @@ StageType                       # тип этапа: погрузка, тамо�
 
 EventType                       # тип события
   code, name{ru,en,...}, icon, color, is_system
-  action: status | detail | incident_open | incident_close | system
-  sets_status?                  # для action = status: arrived | in_progress | paused | completed | departed
-  allowed_in[]                  # в каких статусах этапа доступно (пусто = в любых активных)
+  action: phase | detail | incident_open | incident_close | system
+  sets_phase?                   # для action = phase: arrived | started | paused | resumed | completed | departed
+  allowed_in[]                  # в каких фазах этапа доступно (пусто = в любых, пока этап in_progress)
   allowed_roles[]               # кто может выставлять: driver / dispatcher / ...
   stage_types[]                 # к каким типам этапов относится (пусто = ко всем, «универсальное»)
   fields[]                      # что нужно заполнить (см. ниже)
@@ -55,12 +55,12 @@ IncidentType                    # поломка, ДТП, повреждение
 RequirementType                 # шаблон требования этапа
   code, name, kind: checkbox | photo | document | signature | number | text | select
   fulfilled_by_event_type?      # каким уточняющим событием закрывается
-  blocks_status                 # до какого статуса обязательно (обычно departed)
+  required_before_phase         # до какой фазы обязательно (обычно departed)
 ```
 
-Автомат статусов один и зафиксирован в коде, тип этапа выбирает только профиль,
+Автомат фаз один и зафиксирован в коде, тип этапа выбирает только профиль,
 см. [state-machine.md](state-machine.md). Компания настраивает только типы
-этапов и события. При сохранении события проверяется, что `sets_status`
+этапов и события. При сохранении события проверяется, что `sets_phase`
 допустим в профилях выбранных типов этапов.
 
 ### Поля события (`fields`)
@@ -96,8 +96,8 @@ Stage                                           # этап: точка или т
   id, external_id, trip_id, seq
   stage_type_id, kind: point | transit          # kind дублируется из типа для быстрых запросов
   # вычисляемые поля (кэш, пересчитываются из журнала событий):
-  status?                                       # null | arrived | in_progress | paused | completed | departed | skipped
-  phase: ahead | current | passed          # положение этапа в рейсе, выводится из status
+  status: ahead | in_progress | passed | skipped   # положение этапа в рейсе
+  phase?: arrived | started | paused | resumed | completed | departed   # последняя веха
   arrived_at?, started_at?, completed_at?, departed_at?   # у транзита: started_at, completed_at
   pause_total_sec
   assignee_id?                                  # исполнитель; пусто — водитель рейса
@@ -123,11 +123,11 @@ StageRequirement
   fulfilled_by_event_id?                        # каким событием закрыто
 ```
 
-Статусное событие недоступно, пока не закрыты обязательные требования до
-этого статуса (`blocks_status`). Диспетчер может выставить его
+Событие фазы недоступно, пока не закрыты обязательные требования до этой
+фазы (`required_before_phase`). Диспетчер может выставить его
 принудительно, с причиной; это фиксируется в журнале.
 
-В каждый момент у рейса не больше одного этапа с `phase = current`.
+В каждый момент у рейса не больше одного этапа со статусом `in_progress`.
 
 ## Событие
 

@@ -1,22 +1,22 @@
 # Базовые справочники (черновик)
 
 Поставляются с продуктом как системные. Компания может переименовать или
-скрыть их, а также добавить свои типы этапов и события. Автомат статусов
-при этом не меняются, см. [state-machine.md](state-machine.md). **Список
+скрыть их, а также добавить свои типы этапов и события. Автомат фаз
+при этом не меняется, см. [state-machine.md](state-machine.md). **Список
 нужно сверить с практикой.**
 
-Обозначения в колонке «Статус»: **→ X** — событие переводит этап в статус X;
-**· X** — уточняющее событие, доступное в статусе X, статус не меняет.
+Обозначения в колонке «Фаза»: **→ X** — событие ставит этапу фазу X;
+**· X** — уточняющее событие, доступное в фазе X, фазу не меняет.
 
 ## Универсальные события (на любой точке)
 
-| code | Название | Статус |
+| code | Название | Фаза |
 |---|---|---|
 | `arrived` | Прибыл | → arrived |
-| `work_started` | Начата работа / В процессе | → in_progress |
-| `paused` | Пауза | → paused ⟨причина⟩ |
-| `resumed` | Продолжить | → in_progress |
-| `work_finished` | Работа завершена | → completed |
+| `work_started` | Начато | → started |
+| `paused` | Приостановлено | → paused ⟨причина⟩ |
+| `resumed` | Возобновлено | → resumed |
+| `work_finished` | Завершено | → completed |
 | `departed` | Убыл | → departed |
 
 Типы этапов ниже добавляют к ним свои формулировки и уточнения.
@@ -49,76 +49,76 @@
 
 ### Погрузка / выгрузка
 
-| code | Название | Статус | Поля |
+| code | Название | Фаза | Поля |
 |---|---|---|---|
 | `queue_joined` | Встал в очередь | · arrived | номер в очереди |
 | `at_dock` | Поставлен на рампу | · arrived | номер рампы |
-| `loading_started` / `unloading_started` | Начало погрузки / выгрузки | → in_progress | — |
-| `photo_cargo` | Фото груза | · in_progress, completed | фото |
-| `temp_reading` | Температура | · in_progress, completed | °C, фото дисплея |
+| `loading_started` / `unloading_started` | Начало погрузки / выгрузки | → started | — |
+| `photo_cargo` | Фото груза | · started, resumed, completed | фото |
+| `temp_reading` | Температура | · started, resumed, completed | °C, фото дисплея |
 | `loaded` / `unloaded` | Погружен / Выгружен | → completed | фото, кол-во паллет |
 | `seal_set` | Пломба установлена | · completed | номер, фото |
 | `docs_received` / `docs_signed` | Документы получены / подписаны | · completed | фото CMR/ТТН |
-| `refused` | Отказ в погрузке / приёмке | · arrived, in_progress | причина, фото |
-| `claim` | Расхождение при выгрузке | · in_progress, completed | описание, фото |
+| `refused` | Отказ в погрузке / приёмке | · arrived, started, resumed | причина, фото |
+| `claim` | Расхождение при выгрузке | · started, resumed, completed | описание, фото |
 
 Требования по умолчанию для погрузки: `loaded`, `seal_set`, `docs_received`
 обязательны до «Убыл» (`departed`).
 
 ### Таможня / контроль
 
-| code | Название | Статус | Поля |
+| code | Название | Фаза | Поля |
 |---|---|---|---|
 | `queue_joined` | Встал в очередь | · arrived | — |
-| `docs_submitted` | Подал документы | → in_progress | фото |
-| `inspection_started` / `inspection_finished` | Досмотр начат / окончен | · in_progress | — |
+| `docs_submitted` | Подал документы | → started | фото |
+| `inspection_started` / `inspection_finished` | Досмотр начат / окончен | · started, resumed | — |
 | `detained` | Задержан | → paused | причина |
-| `detention_lifted` | Задержание снято | → in_progress | — |
+| `detention_lifted` | Задержание снято | → resumed | — |
 | `released` | Выпуск | → completed | номер декларации |
 
 ### Граница
 
-| code | Название | Статус |
+| code | Название | Фаза |
 |---|---|---|
 | `border_queue` | Очередь на границе | · arrived |
-| `border_control_started` | Начат контроль | → in_progress |
+| `border_control_started` | Начат контроль | → started |
 | `border_crossed` | Границу пересёк | → departed |
 
 ### Паромный порт
 
-| code | Название | Статус | Поля |
+| code | Название | Фаза | Поля |
 |---|---|---|---|
 | `checked_in` | Регистрация | · arrived | фото билета, номер брони |
 | `missed_departure` | Не попал на рейс | · arrived | новый рейс, ETA |
-| `boarding` | Посадка | → in_progress | — |
+| `boarding` | Посадка | → started | — |
 | `on_board` | На борту | → departed | — |
 | `disembarked` | Съехал с парома | → departed (порт прибытия) | — |
 
 ### Отцепка / сцепка / смена водителя
 
-| code | Название | Статус | Поля |
+| code | Название | Фаза | Поля |
 |---|---|---|---|
-| `trailer_dropped` | Прицеп отцеплен | → in_progress | фото, номер прицепа, пломба |
-| `trailer_coupled` | Прицеп сцеплен | → in_progress | фото, номер прицепа, пломба |
-| `handover` | ТС передано | → in_progress | фото, пробег, топливо |
+| `trailer_dropped` | Прицеп отцеплен | → started | фото, номер прицепа, пломба |
+| `trailer_coupled` | Прицеп сцеплен | → started | фото, номер прицепа, пломба |
+| `handover` | ТС передано | → started | фото, пробег, топливо |
 
 После этих событий этап закрывается обычным «Убыл» (`departed`).
 
 ## События транзита
 
-| code | Название | Статус | Поля |
+| code | Название | Фаза | Поля |
 |---|---|---|---|
-| — | (старт) | → in_progress (road) / → paused (ferry, rail) | автоматически при «Убыл» с предыдущей точки |
+| — | (старт) | → started | автоматически при «Убыл» / «На борту» с предыдущей точки |
 | `rest_started` | Начал отдых | → paused | тип: короткий / ежедневный / еженедельный |
 | `stopped` | Остановка | → paused | причина: пробка, полиция, погода, дорога закрыта, прочее |
-| `moving_resumed` | Продолжил движение | → in_progress | — |
-| `vessel_departed` | Отплытие (паром) | → in_progress | — |
-| `vessel_delayed` | Задержка парома | → paused | новое время |
-| `eta_update` | Новое ETA | · in_progress, paused | время, причина |
-| `fuel_receipt` | Заправка | · in_progress, paused | литры, сумма, фото чека |
-| `expense` | Расход (дорога, стоянка, паром) | · in_progress, paused | сумма, валюта, фото |
+| `moving_resumed` | Продолжил движение | → resumed | — |
+| `vessel_departed` | Отплытие (паром, поезд) | · started | — |
+| `vessel_delayed` | Задержка парома / поезда | · started | новое время |
+| `eta_update` | Новое ETA | · started, paused, resumed | время, причина |
+| `fuel_receipt` | Заправка | · started, paused, resumed | литры, сумма, фото чека |
+| `expense` | Расход (дорога, стоянка, паром) | · started, paused, resumed | сумма, валюта, фото |
 | `photo_report` | Фотоотчёт | · любой | фото, комментарий |
-| — | (финиш) | → completed | автоматически при `arrived` на следующей точке |
+| — | (финиш) | → completed | автоматически при «Прибыл» на следующей точке |
 
 ## Инциденты
 
@@ -143,8 +143,8 @@
 | `ferry_booked` | Паром забронирован | уточняющее (этап впереди) | судно, рейс, бронь, время |
 | `customer_notified` | Клиент уведомлён | уточняющее | комментарий |
 | `downtime_confirmed` | Простой подтверждён | уточняющее (departed) | часы, комментарий |
-| `stage_skipped` | Этап пропущен | → skipped | причина |
-| — | Любое статусное событие за водителя | `forced` | причина |
+| `stage_skipped` | Этап пропущен | статус → skipped | причина |
+| — | Любое событие фазы за водителя | `forced` | причина |
 | `incident_acknowledged` / `incident_resolved` | Инцидент принят / решён | инцидент | комментарий |
 | `trip_closed` | Рейс закрыт (документы получены) | рейс → closed | — |
 | `trip_cancelled` | Рейс отменён | рейс → cancelled | причина |
@@ -153,9 +153,9 @@
 
 | code | Когда |
 |---|---|
-| `late_for_window` | точка не в `arrived` к `window_to` |
+| `late_for_window` | у точки нет фазы `arrived` к `window_to` |
 | `eta_after_window` | ETA позже окна прибытия |
-| `long_wait` | в `arrived` дольше N минут (очередь, простой) |
-| `long_stop` | транзит в `paused` дольше N минут без отдыха |
+| `long_wait` | в фазе `arrived` дольше N минут (очередь, простой) |
+| `long_stop` | транзит в фазе `paused` дольше N минут без отдыха |
 | `no_signal` | от водителя нет данных N часов |
 | `event_conflict` | событие не вписалось в автомат при пересчёте |
