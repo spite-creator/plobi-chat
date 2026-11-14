@@ -10,6 +10,7 @@ export * from './machines/trip-state.js';
 
 // catalog
 export * from './catalog/types.js';
+export * from './catalog/rule-scope.js';
 export { BASE_CATALOG } from './catalog/base.js';
 export { validateCatalog, type CatalogIssue } from './catalog/validate.js';
 

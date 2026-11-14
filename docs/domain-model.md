@@ -70,7 +70,7 @@ RequirementTemplate             # шаблон требования (справ�
 
 RequirementRule                 # когда шаблон применяется автоматически
   requirement_template_id
-  stage_types[], tags_required[]   # «у всех погрузок» / «у рейсов с #reefer»
+  ...RuleScope                  # «у всех погрузок» / «#reefer» / «клиент X» / «склад Y»
 ```
 
 Подробнее о событиях и требованиях: [events-and-requirements.md](events-and-requirements.md).
@@ -103,6 +103,7 @@ RequirementRule                 # когда шаблон применяется
 Trip
   id, external_id, number
   state: draft | assigned | accepted | in_progress | finished | closed | cancelled
+  customer_id?
   tags[]                                        # #reefer, #adr, #customs ...
   driver_id, co_driver_id?, dispatcher_id
   vehicle {plate, model}, trailer {plate}       # пока свободные поля, справочник ТС потом
@@ -192,8 +193,15 @@ Place
   instructions[]                # постоянные, копируются в каждый этап на это место
   tags[]
 
-InstructionRule                 # инструкции по типу этапа и тегам (справочник)
-  stage_types[], tags_required[], instruction
+Customer                        # клиент: заказчик, грузоотправитель, грузополучатель
+  id, external_id, name, contacts[]
+  # требования клиента = правила с условием customers = [id], редактируются в карточке клиента
+
+RuleScope                       # общие условия правил требований и инструкций
+  stage_types[], tags_required[], customers[], places[]
+
+InstructionRule                 # инструкция по правилу (RuleScope + instruction)
+  code, ...RuleScope, instruction
 
 StageInstruction                # инструкция на конкретном этапе
   id

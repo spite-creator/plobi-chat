@@ -3,6 +3,7 @@ import {
   BASE_CATALOG,
   evaluateTrip,
   materializeInstructions,
+  materializeRequirements,
   type Place,
   type StageInstruction,
   type TripInput,
@@ -37,24 +38,24 @@ const tripWith = (instructions: StageInstruction[]): TripInput => ({
 
 describe('where instructions come from', () => {
   it('a stage gets the place instructions and the catalog rules for its tags', () => {
-    const list = materializeInstructions({ id: 'load', typeCode: 'loading' }, ['adr'], BASE_CATALOG, warehouse);
+    const list = materializeInstructions({ id: 'load', typeCode: 'loading' }, { tags: ['adr'] }, BASE_CATALOG, warehouse);
     expect(list.map((i) => [i.id, i.source])).toEqual([
       ['load:place:call', 'place'],
       ['load:place:gate', 'place'],
-      ['load:rule:adr_parking', 'instruction_rule'],
+      ['load:rule:adr_parking', 'tag_rule'],
     ]);
   });
 
   it('a #reefer rule applies only to loadings', () => {
-    const atLoading = materializeInstructions({ id: 'l', typeCode: 'loading' }, ['reefer'], BASE_CATALOG);
-    const atUnloading = materializeInstructions({ id: 'u', typeCode: 'unloading' }, ['reefer'], BASE_CATALOG);
+    const atLoading = materializeInstructions({ id: 'l', typeCode: 'loading' }, { tags: ['reefer'] }, BASE_CATALOG);
+    const atUnloading = materializeInstructions({ id: 'u', typeCode: 'unloading' }, { tags: ['reefer'] }, BASE_CATALOG);
     expect(atLoading.map((i) => i.id)).toEqual(['l:rule:reefer_check']);
     expect(atUnloading).toEqual([]);
   });
 });
 
 describe('when instructions are shown', () => {
-  const place = materializeInstructions({ id: 'load', typeCode: 'loading' }, [], BASE_CATALOG, warehouse);
+  const place = materializeInstructions({ id: 'load', typeCode: 'loading' }, {}, BASE_CATALOG, warehouse);
 
   it('"always" is visible from assignment; "arrived" appears after arrival', () => {
     const before = evaluateTrip(tripWith(place), [], BASE_CATALOG).stages[0]?.instructions;
@@ -109,5 +110,46 @@ describe('"Acknowledged" is a requirement', () => {
     const r = evaluateTrip(tripWith([changed]), j.events, BASE_CATALOG);
     expect(r.events.find((e) => e.eventId === start.id)?.conflict?.reason).toBe('requirements_unmet');
     expect(r.stages[0]?.instructions[0]).toMatchObject({ revision: 2, acknowledged: false });
+  });
+});
+
+describe('customer requirements', () => {
+  // "Customer X at loading: no more than 2 tiers (acknowledge), straps checklist, photo of securing"
+  const catalog = {
+    ...BASE_CATALOG,
+    requirementTemplates: {
+      ...BASE_CATALOG.requirementTemplates,
+      straps_photo: {
+        code: 'straps_photo',
+        title: { ru: 'Фото крепления ремнями' },
+        kind: 'photo' as const,
+        min: 2,
+        beforePhase: 'departed' as const,
+        strictness: 'block' as const,
+        waivable: true,
+      },
+    },
+    requirementRules: [...BASE_CATALOG.requirementRules, { template: 'straps_photo', stageTypes: ['loading'], customers: ['cust-x'] }],
+    instructionRules: [
+      ...BASE_CATALOG.instructionRules,
+      {
+        code: 'x_tiers',
+        stageTypes: ['loading'],
+        customers: ['cust-x'],
+        instruction: { kind: 'text' as const, text: 'Не более 2 ярусов', showAt: 'arrived' as const, ackBeforePhase: 'started' as const },
+      },
+    ],
+  };
+  const stage = { id: 'load', typeCode: 'loading' };
+
+  it('apply only to trips of that customer', () => {
+    expect(materializeInstructions(stage, { customerId: 'cust-x' }, catalog).map((i) => [i.id, i.source])).toEqual([
+      ['load:rule:x_tiers', 'customer'],
+    ]);
+    expect(materializeInstructions(stage, { customerId: 'cust-y' }, catalog)).toEqual([]);
+    expect(materializeRequirements(stage, { customerId: 'cust-x' }, catalog).find((r) => r.template === 'straps_photo')?.source).toBe(
+      'customer',
+    );
+    expect(materializeRequirements(stage, { customerId: 'cust-y' }, catalog).map((r) => r.template)).not.toContain('straps_photo');
   });
 });

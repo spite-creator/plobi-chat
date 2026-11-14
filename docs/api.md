@@ -112,6 +112,15 @@ PUT    /places/by-external-id/{ext}
 PATCH  /places/{id}                    # контакты, часы работы, постоянные инструкции
 ```
 
+### Клиенты
+```
+GET    /customers?query=
+POST   /customers
+PUT    /customers/by-external-id/{ext}
+GET    /customers/{id}/rules            # требования и инструкции клиента
+PUT    /customers/{id}/rules
+```
+
 ### Инструкции этапа
 ```
 GET    /stages/{id}/instructions

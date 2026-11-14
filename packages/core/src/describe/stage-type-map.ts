@@ -45,6 +45,7 @@ export function stageTypeMap(catalog: Catalog, stageTypeCode: string): StageType
   const events = Object.values(catalog.eventTypes).filter((e) => eventFitsStageType(e, stageType));
   const templates = catalog.requirementRules
     .filter((r) => !r.stageTypes || r.stageTypes.includes(stageType.code))
+    .filter((r) => !r.customers && !r.places) // shown on the customer / place card instead
     .map((r) => catalog.requirementTemplates[r.template])
     .filter((t): t is RequirementTemplate => t !== undefined);
 

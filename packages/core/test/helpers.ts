@@ -21,7 +21,7 @@ export function buildTrip(
   const catalog = options.catalog ?? BASE_CATALOG;
   const tags = options.tags ?? [];
   const stages: StageInput[] = insertTransits(points, catalog).map((s) =>
-    catalog.stageTypes[s.typeCode]?.kind === 'point' ? { ...s, requirements: materializeRequirements(s, tags, catalog) } : s,
+    catalog.stageTypes[s.typeCode]?.kind === 'point' ? { ...s, requirements: materializeRequirements(s, { tags }, catalog) } : s,
   );
   return { id: 'trip-1', driverId: options.driverId ?? 'driver-1', tags, stages };
 }

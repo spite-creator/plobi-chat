@@ -6,6 +6,7 @@
  * ordinary requirement of kind `acknowledgement`, so gating, waivers and
  * offline violations work exactly as for any other requirement.
  */
+import { ruleApplies, ruleOrigin, ruleSubject, type StageFacts, type TripFacts } from '../catalog/rule-scope.js';
 import type { Catalog, InstructionShowAt, Place } from '../catalog/types.js';
 import { PHASE_RANK, type Phase } from '../machines/phase.js';
 import type { StageInput, StageInstruction, StageRequirement } from './types.js';
@@ -13,21 +14,23 @@ import type { StageInput, StageInstruction, StageRequirement } from './types.js'
 /** Event type code that acknowledges an instruction (values: instructionId, revision). */
 export const ACKNOWLEDGE_EVENT = 'instruction_acknowledged';
 
-/** Instructions a new stage gets: place first, then catalog rules. Manual ones are added by the caller. */
+/**
+ * Instructions a new stage gets: the permanent ones of its place, then catalog
+ * rules (stage type, tags, customer, place). Manual ones are added by the caller.
+ */
 export function materializeInstructions(
-  stage: { readonly id: string; readonly typeCode: string; readonly tags?: readonly string[] },
-  tripTags: readonly string[],
+  stage: StageFacts,
+  trip: TripFacts,
   catalog: Catalog,
   place?: Place,
 ): StageInstruction[] {
-  const tags = new Set([...tripTags, ...(stage.tags ?? [])]);
+  const subject = ruleSubject(stage, trip);
   const fromPlace = (place?.instructions ?? []).map(
     ({ id, ...content }): StageInstruction => ({ ...content, id: `${stage.id}:place:${id}`, revision: 1, source: 'place' }),
   );
   const fromRules = catalog.instructionRules
-    .filter((r) => !r.stageTypes || r.stageTypes.includes(stage.typeCode))
-    .filter((r) => !r.tagsRequired || r.tagsRequired.every((t) => tags.has(t)))
-    .map((r): StageInstruction => ({ ...r.instruction, id: `${stage.id}:rule:${r.code}`, revision: 1, source: 'instruction_rule' }));
+    .filter((r) => ruleApplies(r, subject))
+    .map((r): StageInstruction => ({ ...r.instruction, id: `${stage.id}:rule:${r.code}`, revision: 1, source: ruleOrigin(r) }));
   return [...fromPlace, ...fromRules];
 }
 

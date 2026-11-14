@@ -4,6 +4,7 @@
  * Each requirement kind has a measure. New kinds are added to MEASURES;
  * nothing else changes.
  */
+import { ruleApplies, ruleOrigin, ruleSubject, type StageFacts, type TripFacts } from '../catalog/rule-scope.js';
 import type { Catalog, RequirementKind } from '../catalog/types.js';
 import { PHASE_RANK, type Phase } from '../machines/phase.js';
 import { isEmptyValue } from './fields.js';
@@ -120,28 +121,19 @@ export function markNotApplicable(stage: StageRun): void {
 }
 
 /**
- * Requirements a new stage gets from the catalog: by stage type and by tag rules.
- * Called once when a trip is created; afterwards they live on the stage.
+ * Requirements a new stage gets from the catalog rules: by stage type, tags,
+ * customer and place. Called once when a trip is created; afterwards they
+ * live on the stage and can be edited for that trip.
  */
-export function materializeRequirements(
-  stage: { readonly id: string; readonly typeCode: string; readonly tags?: readonly string[] },
-  tripTags: readonly string[],
-  catalog: Catalog,
-): StageRequirement[] {
-  const tags = new Set([...tripTags, ...(stage.tags ?? [])]);
+export function materializeRequirements(stage: StageFacts, trip: TripFacts, catalog: Catalog): StageRequirement[] {
+  const subject = ruleSubject(stage, trip);
   const result = new Map<string, StageRequirement>(); // one per template, even if several rules match
   for (const rule of catalog.requirementRules) {
-    if (rule.stageTypes && !rule.stageTypes.includes(stage.typeCode)) continue;
-    if (rule.tagsRequired && !rule.tagsRequired.every((t) => tags.has(t))) continue;
+    if (!ruleApplies(rule, subject)) continue;
     const template = catalog.requirementTemplates[rule.template];
     if (!template || result.has(template.code)) continue;
     const { code, ...spec } = template;
-    result.set(code, {
-      ...spec,
-      id: `${stage.id}:${code}`,
-      template: code,
-      source: rule.tagsRequired ? 'tag_rule' : 'stage_type',
-    });
+    result.set(code, { ...spec, id: `${stage.id}:${code}`, template: code, source: ruleOrigin(rule) });
   }
   return [...result.values()];
 }

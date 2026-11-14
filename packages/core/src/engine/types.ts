@@ -2,6 +2,7 @@
  * Engine input (a trip and its event journal) and output (computed state).
  * Times are ISO-8601 strings in UTC.
  */
+import type { RuleOrigin } from '../catalog/rule-scope.js';
 import type { InstructionContent, RequirementSpec, Role, StageKind } from '../catalog/types.js';
 import type { Phase, Profile } from '../machines/phase.js';
 import type { StageState } from '../machines/stage-state.js';
@@ -11,7 +12,7 @@ import type { TripState } from '../machines/trip-state.js';
 
 export interface StageRequirement extends RequirementSpec {
   readonly id: string;
-  readonly source: 'stage_type' | 'tag_rule' | 'instruction' | 'manual';
+  readonly source: RuleOrigin | 'instruction' | 'manual';
   readonly template?: string;
 }
 
@@ -19,12 +20,14 @@ export interface StageInstruction extends InstructionContent {
   readonly id: string;
   /** Grows on every change; an acknowledgement counts only for the current revision. */
   readonly revision: number;
-  readonly source: 'place' | 'instruction_rule' | 'manual';
+  /** `place` = permanent instruction of the place card; others = catalog rules or manual. */
+  readonly source: RuleOrigin | 'manual';
 }
 
 export interface StageInput {
   readonly id: string;
   readonly typeCode: string;
+  readonly placeId?: string;
   readonly assigneeId?: string;
   readonly tags?: readonly string[];
   readonly requirements?: readonly StageRequirement[];
@@ -35,6 +38,7 @@ export interface StageInput {
 export interface TripInput {
   readonly id: string;
   readonly driverId?: string;
+  readonly customerId?: string;
   readonly tags?: readonly string[];
   readonly stages: readonly StageInput[];
 }

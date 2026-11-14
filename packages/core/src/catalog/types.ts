@@ -5,6 +5,7 @@
  */
 import type { Phase, Profile } from '../machines/phase.js';
 import type { StageState } from '../machines/stage-state.js';
+import type { RuleScope } from './rule-scope.js';
 
 export type StageKind = 'point' | 'transit';
 export type TransitMode = 'road' | 'ferry' | 'rail';
@@ -139,11 +140,9 @@ export interface RequirementTemplate extends RequirementSpec {
   readonly code: string;
 }
 
-/** When a template is attached to stages automatically. */
-export interface RequirementRule {
+/** When a template is attached to stages automatically (stage type, tags, customer, place). */
+export interface RequirementRule extends RuleScope {
   readonly template: string;
-  readonly stageTypes?: readonly string[];
-  readonly tagsRequired?: readonly string[];
 }
 
 export const INSTRUCTION_KINDS = ['text', 'contact', 'photo', 'location', 'file', 'voice', 'link'] as const;
@@ -165,10 +164,8 @@ export interface InstructionContent {
   readonly ackBeforePhase?: Phase;
 }
 
-export interface InstructionRule {
+export interface InstructionRule extends RuleScope {
   readonly code: string;
-  readonly stageTypes?: readonly string[];
-  readonly tagsRequired?: readonly string[];
   readonly instruction: InstructionContent;
 }
 

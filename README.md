@@ -26,7 +26,7 @@
 - [Архитектура и развёртывание](docs/architecture.md)
 - [Этапы: состояние, фаза и автоматы](docs/state-machine.md)
 - [События и требования](docs/events-and-requirements.md)
-- [Места и инструкции](docs/places-and-instructions.md)
+- [Места, клиенты и инструкции](docs/places-and-instructions.md)
 - [Модель данных](docs/domain-model.md)
 - [API](docs/api.md)
 - [Базовые справочники этапов и событий](docs/base-catalog.md)
