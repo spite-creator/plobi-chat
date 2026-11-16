@@ -80,7 +80,7 @@ POST /api/v1/trips
         { "kind": "photo", "title": "Фото крепления ремнями", "min": 2, "beforePhase": "departed" }
       ]
     },
-    { "type": "customs_export", "details": { "address": "МАПП Брест" } },
+    { "type": "export_clearance", "details": { "address": "МАПП Брест" } },
     { "type": "unloading", "details": { "address": "Warszawa, ul. Magazynowa 5", "timezone": "Europe/Warsaw" } }
   ]
 }
