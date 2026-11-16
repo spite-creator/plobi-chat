@@ -27,7 +27,7 @@ export interface StageInput {
    * back to the trip driver: after a takeover the next driver leads the trip.
    */
   readonly assigneeId?: string;
-  /** Transport: on embark — the carrier (ferry, rail, air); on a transit — how it moves. Default road. */
+  /** How a transit moves; set when transits are inserted. Default road. */
   readonly mode?: TransportMode;
   readonly tags?: readonly string[];
   readonly requirements?: readonly StageRequirement[];

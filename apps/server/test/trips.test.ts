@@ -218,3 +218,56 @@ describe('offline sync', () => {
     expect((await driver.api.get(`/trips/${trip.id}`)).body.journal).toHaveLength(1);
   });
 });
+
+describe('handover → takeover with two drivers', () => {
+  it('the receiving driver sees the trip and leads it on; the first one cannot act for them', async () => {
+    const res = await dispatcher.post('/trips', {
+      number: 'R-HANDOVER',
+      driver: { id: driver.id },
+      stages: [
+        { type: 'handover', details: { address: 'Склад Северный' } },
+        { type: 'takeover', assigneeId: otherDriver.id, details: { address: 'Склад Северный' } },
+        { type: 'border_open', details: { address: 'Франкфурт-на-Одере' } },
+        { type: 'unloading' },
+      ],
+    });
+    expect(res.status).toBe(201);
+    const trip = res.body;
+    expect(trip.stages.map((s: any) => s.typeCode)).toEqual(['handover', 'takeover', 'transit', 'border_open', 'transit', 'unloading']);
+    expect(trip.stages.map((s: any) => s.assigneeId)).toEqual([driver.id, otherDriver.id, otherDriver.id, otherDriver.id, otherDriver.id, otherDriver.id]);
+
+    const [hand, take, , border, , unload] = trip.stages.map((s: any) => s.id);
+    // Driver 1 hands over; requirements waived to keep the scenario short.
+    await driver.api.post(`/trips/${trip.id}/events`, event('arrived', hand));
+    for (const r of trip.stages[0].requirements) {
+      await dispatcher.post(`/trips/${trip.id}/events`, event('requirement_waived', hand, { values: { requirementId: r.id, reason: 'test' } }));
+    }
+    await driver.api.post(`/trips/${trip.id}/events`, event('handover_started', hand));
+    await driver.api.post(`/trips/${trip.id}/events`, event('handed_over', hand, { values: { transferred: ['cargo'] } }));
+    expect((await driver.api.post(`/trips/${trip.id}/events`, event('departed', hand))).status).toBe(201);
+
+    // Driver 1 may not take over for driver 2.
+    const wrong = await driver.api.post(`/trips/${trip.id}/events`, event('arrived', take));
+    expect(wrong.status).toBe(409);
+    expect(wrong.body.details).toEqual({ reason: 'out_of_scope', details: ['assignee'] });
+
+    // Driver 2 sees the trip and takes over.
+    expect((await otherDriver.api.get('/trips')).body.map((t: any) => t.id)).toContain(trip.id);
+    for (const r of trip.stages[1].requirements) {
+      await dispatcher.post(`/trips/${trip.id}/events`, event('requirement_waived', take, { values: { requirementId: r.id, reason: 'test' } }));
+    }
+    for (const code of ['arrived', 'takeover_started']) {
+      expect((await otherDriver.api.post(`/trips/${trip.id}/events`, event(code, take))).status).toBe(201);
+    }
+    await otherDriver.api.post(`/trips/${trip.id}/events`, event('taken_over', take, { values: { transferred: ['cargo'] } }));
+    await otherDriver.api.post(`/trips/${trip.id}/events`, event('departed', take));
+
+    // He drives through the fast border crossing without pressing "passed".
+    const arrival = await otherDriver.api.post(`/trips/${trip.id}/events`, event('arrived', unload));
+    expect(arrival.status).toBe(201);
+    const stages = arrival.body.trip.stages;
+    expect(stages.find((s: any) => s.id === border)).toMatchObject({ state: 'passed', autoPassed: true });
+    expect(arrival.body.trip.currentStageId).toBe(unload);
+  });
+});
+

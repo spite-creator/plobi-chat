@@ -39,8 +39,8 @@ export const stages = pgTable(
     typeCode: text('type_code').notNull(),
     placeId: uuid('place_id'),
     assigneeId: uuid('assignee_id'),
-    /** Transport: carrier on embark (ferry / rail / air), how a transit moves (road by default). */
-    mode: text('mode', { enum: ['road', 'ferry', 'rail', 'air'] }),
+    /** How a transit moves: road, or ferry between ferry_embark and ferry_disembark. */
+    mode: text('mode', { enum: ['road', 'ferry'] }),
     isAuto: boolean('is_auto').notNull().default(false),
     tags: text('tags').array().notNull().default([]),
     details: jsonb('details').$type<StageDetails>().notNull().default({}),

@@ -233,18 +233,18 @@ describe('requirements before a phase', () => {
   });
 });
 
-describe('ferry with the driver on board (embark → disembark)', () => {
+describe('ferry with the driver on board', () => {
   const trip = buildTrip([
-    { id: 'port1', typeCode: 'embark' },
-    { id: 'port2', typeCode: 'disembark' },
+    { id: 'port1', typeCode: 'ferry_embark' },
+    { id: 'port2', typeCode: 'ferry_disembark' },
     { id: 'unload', typeCode: 'unloading' },
   ]);
 
   it('inserts one transit type; the one between embark and disembark goes by ferry', () => {
     expect(trip.stages.map((s) => [s.typeCode, s.mode])).toEqual([
-      ['embark', undefined],
+      ['ferry_embark', undefined],
       ['transit', 'ferry'],
-      ['disembark', undefined],
+      ['ferry_disembark', undefined],
       ['transit', 'road'],
       ['unloading', undefined],
     ]);
@@ -256,7 +256,7 @@ describe('ferry with the driver on board (embark → disembark)', () => {
     j.driver('checked_in', 'port1', { values: { booking: 'B-77' } });
     j.driver('boarding', 'port1', { attachments: photos('port1:ferry_ticket', 1) });
     j.driver('on_board', 'port1');
-    j.driver('carrier_departed', 'port1~port2');
+    j.driver('ferry_departed', 'port1~port2');
     j.driver('disembarked', 'port2');
     j.driver('departed', 'port2');
     const r = evaluateTrip(trip, j.events, BASE_CATALOG);

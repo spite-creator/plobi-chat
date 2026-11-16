@@ -7,8 +7,8 @@ import type { Phase, Profile } from '../machines/phase.js';
 import type { StageState } from '../machines/stage-state.js';
 
 export type StageKind = 'point' | 'transit';
-/** How a stage moves: a transit by road, or on a ferry, train or plane (set on embark). */
-export type TransportMode = 'road' | 'ferry' | 'rail' | 'air';
+/** How a transit moves: by road, or on a ferry with the driver on board. */
+export type TransportMode = 'road' | 'ferry';
 export type Role = 'driver' | 'dispatcher' | 'observer' | 'integration' | 'system';
 export type LocalizedText = Readonly<Record<string, string>>;
 

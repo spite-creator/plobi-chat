@@ -13,8 +13,7 @@ export type TransitRule = (from: StageInput, to: StageInput, catalog: Catalog) =
 
 export const defaultTransitRule: TransitRule = (from, to, catalog) => {
   if (catalog.stageTypes[from.typeCode]?.noTransitAfter) return null;
-  // On embark the driver goes on the carrier (ferry by default) until disembark.
-  if (from.typeCode === 'embark' && to.typeCode === 'disembark') return { mode: from.mode ?? 'ferry' };
+  if (from.typeCode === 'ferry_embark' && to.typeCode === 'ferry_disembark') return { mode: 'ferry' };
   return { mode: 'road' };
 };
 

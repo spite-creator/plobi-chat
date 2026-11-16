@@ -12,7 +12,6 @@ import {
   type RequirementSpec,
   type StageInput,
   type StageRequirement,
-  type TransportMode,
 } from '@plobi/core';
 import { badRequest } from '../../platform/errors.js';
 import type { StageDetails } from './schema.js';
@@ -23,8 +22,6 @@ export interface IncomingStage {
   placeId?: string;
   /** Who does this stage; it carries over to the next stages (e.g. the driver who takes over). */
   assigneeId?: string;
-  /** For embark: the carrier (ferry / rail / air); the transit to disembark gets the same. */
-  mode?: TransportMode;
   tags?: string[];
   details?: StageDetails;
   /** What the driver must see and do on this stage: info, "Acknowledged", photos, documents... */
@@ -62,7 +59,7 @@ export function assembleStages(
     s.requirements?.forEach((r, k) => checkRequirement(r, `stages[${i}].requirements[${k}]`));
     const id = randomUUID();
     byId.set(id, s);
-    return { id, typeCode: s.type, ...(s.tags ? { tags: s.tags } : {}), ...(s.mode ? { mode: s.mode } : {}) };
+    return { id, typeCode: s.type, ...(s.tags ? { tags: s.tags } : {}) };
   });
 
   return insertTransits(inputs, ctx.catalog).map((stage, seq): StageRecord => {
