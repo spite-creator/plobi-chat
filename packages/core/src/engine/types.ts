@@ -2,7 +2,7 @@
  * Engine input (a trip and its event journal) and output (computed state).
  * Times are ISO-8601 strings in UTC.
  */
-import type { RequirementKind, RequirementSpec, Role, StageKind } from '../catalog/types.js';
+import type { RequirementKind, RequirementSpec, Role, StageKind, TransportMode } from '../catalog/types.js';
 import type { Phase, Profile } from '../machines/phase.js';
 import type { StageState } from '../machines/stage-state.js';
 import type { TripState } from '../machines/trip-state.js';
@@ -22,7 +22,13 @@ export interface StageRequirement extends RequirementSpec {
 export interface StageInput {
   readonly id: string;
   readonly typeCode: string;
+  /**
+   * Who does this stage. Empty = the assignee of the previous stage, and so on
+   * back to the trip driver: after a takeover the next driver leads the trip.
+   */
   readonly assigneeId?: string;
+  /** Transport: on embark — the carrier (ferry, rail, air); on a transit — how it moves. Default road. */
+  readonly mode?: TransportMode;
   readonly tags?: readonly string[];
   readonly requirements?: readonly StageRequirement[];
   readonly isAuto?: boolean;
@@ -135,6 +141,11 @@ export interface StageResult {
   readonly profile: Profile;
   readonly state: StageState;
   readonly phase: Phase | null;
+  /** Effective assignee (own, inherited from previous stages, or the trip driver). */
+  readonly assigneeId?: string;
+  readonly mode?: TransportMode;
+  /** Closed automatically, the driver did not mark it. */
+  readonly autoPassed?: boolean;
   readonly arrivedAt?: string;
   readonly startedAt?: string;
   readonly completedAt?: string;

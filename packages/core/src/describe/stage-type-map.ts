@@ -21,13 +21,12 @@ export interface StageTypeMap {
   readonly detailEvents: ReadonlyArray<{ phase: Phase; events: readonly string[] }>;
 }
 
-/** Does an event's scope admit this stage type? Tags are runtime and ignored here. */
+/** Does an event's scope admit this stage type? Tags and transport mode are set per stage and ignored here. */
 export function eventFitsStageType(event: EventType, stageType: StageType): boolean {
   const s = event.scope ?? {};
   return (
     (!s.kinds || s.kinds.includes(stageType.kind)) &&
-    (!s.stageTypes || s.stageTypes.includes(stageType.code)) &&
-    (!s.transitModes || (stageType.transitMode !== undefined && s.transitModes.includes(stageType.transitMode)))
+    (!s.stageTypes || s.stageTypes.includes(stageType.code))
   );
 }
 

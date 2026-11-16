@@ -1,17 +1,25 @@
 /**
  * Integrations send points only; transits between them are inserted here.
  */
-import type { Catalog } from '../catalog/types.js';
+import type { Catalog, TransportMode } from '../catalog/types.js';
 import type { StageInput } from './types.js';
 
-/** Which transit connects two neighbouring points. */
-export type TransitRule = (from: StageInput, to: StageInput) => string;
+/**
+ * How two neighbouring points are connected: a transit with its transport
+ * mode, or nothing (after a handover the cargo is with a third party until the
+ * takeover, and nobody of ours moves it).
+ */
+export type TransitRule = (from: StageInput, to: StageInput, catalog: Catalog) => { mode: TransportMode } | null;
 
-export const defaultTransitRule: TransitRule = (from, to) => {
-  if (from.typeCode === 'ferry_port_departure' && to.typeCode === 'ferry_port_arrival') return 'transit_ferry';
-  if (from.typeCode === 'rail_terminal_departure' && to.typeCode === 'rail_terminal_arrival') return 'transit_rail';
-  return 'transit_road';
+export const defaultTransitRule: TransitRule = (from, to, catalog) => {
+  if (catalog.stageTypes[from.typeCode]?.noTransitAfter) return null;
+  // On embark the driver goes on the carrier (ferry by default) until disembark.
+  if (from.typeCode === 'embark' && to.typeCode === 'disembark') return { mode: from.mode ?? 'ferry' };
+  return { mode: 'road' };
 };
+
+/** Code of the stage type used for inserted transits. */
+export const TRANSIT_TYPE = 'transit';
 
 /**
  * Inserts an automatic transit between every two neighbouring points.
@@ -26,8 +34,9 @@ export function insertTransits(
   const result: StageInput[] = [];
   stages.forEach((stage, i) => {
     const prev = stages[i - 1];
-    if (prev && isPoint(prev) && isPoint(stage)) {
-      result.push({ id: `${prev.id}~${stage.id}`, typeCode: rule(prev, stage), isAuto: true });
+    const link = prev && isPoint(prev) && isPoint(stage) ? rule(prev, stage, catalog) : null;
+    if (prev && link) {
+      result.push({ id: `${prev.id}~${stage.id}`, typeCode: TRANSIT_TYPE, mode: link.mode, isAuto: true });
     }
     result.push(stage);
   });

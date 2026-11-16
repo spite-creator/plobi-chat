@@ -7,7 +7,8 @@ import type { Phase, Profile } from '../machines/phase.js';
 import type { StageState } from '../machines/stage-state.js';
 
 export type StageKind = 'point' | 'transit';
-export type TransitMode = 'road' | 'ferry' | 'rail';
+/** How a stage moves: a transit by road, or on a ferry, train or plane (set on embark). */
+export type TransportMode = 'road' | 'ferry' | 'rail' | 'air';
 export type Role = 'driver' | 'dispatcher' | 'observer' | 'integration' | 'system';
 export type LocalizedText = Readonly<Record<string, string>>;
 
@@ -19,8 +20,14 @@ export interface StageType {
   readonly name: LocalizedText;
   readonly kind: StageKind;
   readonly profile: Profile;
-  readonly transitMode?: TransitMode;
   readonly departWithoutWork?: DepartWithoutWork;
+  /**
+   * The point closes by itself when the driver arrives at a later point
+   * without marking it (e.g. a fast border crossing: a route hint).
+   */
+  readonly autoPass?: boolean;
+  /** No transit is inserted after this point (e.g. handover → takeover from the warehouse). */
+  readonly noTransitAfter?: boolean;
 }
 
 /** What an event does. Each action has its own handler in the engine. */
@@ -40,7 +47,7 @@ export type EventAction =
 export interface EventScope {
   readonly kinds?: readonly StageKind[];
   readonly stageTypes?: readonly string[];
-  readonly transitModes?: readonly TransitMode[];
+  readonly transportModes?: readonly TransportMode[];
   readonly phases?: readonly (Phase | null)[];
   readonly states?: readonly StageState[];
   readonly roles?: readonly Role[];

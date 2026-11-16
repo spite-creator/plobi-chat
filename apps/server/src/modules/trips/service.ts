@@ -59,7 +59,8 @@ export interface StageView extends Omit<StageResult, 'requirements'> {
   seq: number;
   externalId: string | null;
   placeId: string | null;
-  assigneeId: string | null;
+  /** Assignee set on this stage; `assigneeId` is the effective one (inherited if empty). */
+  ownAssigneeId: string | null;
   isAuto: boolean;
   tags: string[];
   details: StageRow['details'];
@@ -74,7 +75,7 @@ function stageView(row: StageRow, result: StageResult): StageView {
     seq: row.seq,
     externalId: row.externalId,
     placeId: row.placeId,
-    assigneeId: row.assigneeId,
+    ownAssigneeId: row.assigneeId,
     isAuto: row.isAuto,
     tags: row.tags,
     details: row.details,
@@ -113,6 +114,7 @@ const toTripInput = ({ trip, stages: rows }: Pick<Loaded, 'trip' | 'stages'>): T
   stages: rows.map((s) => ({
     id: s.id,
     typeCode: s.typeCode,
+    ...(s.mode ? { mode: s.mode } : {}),
     isAuto: s.isAuto,
     tags: s.tags,
     requirements: s.requirements,
@@ -198,6 +200,7 @@ export class TripService {
           typeCode: r.typeCode,
           placeId: r.placeId ?? null,
           assigneeId: r.assigneeId ?? null,
+          mode: r.mode ?? null,
           isAuto: r.isAuto ?? false,
           tags: [...(r.tags ?? [])],
           details: r.details,

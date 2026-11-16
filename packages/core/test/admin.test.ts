@@ -52,7 +52,7 @@ describe('admin: stage type map and catalog check', () => {
   });
 
   it('marks transit start and end as automatic', () => {
-    const map = stageTypeMap(BASE_CATALOG, 'transit_road');
+    const map = stageTypeMap(BASE_CATALOG, 'transit');
     expect(map?.transitions.filter((t) => t.automatic).map((t) => `${t.from}→${t.to}`)).toEqual([
       'null→started',
       'started→completed',
@@ -60,10 +60,8 @@ describe('admin: stage type map and catalog check', () => {
     ]);
   });
 
-  it('the base catalog has no errors; ferry and rail have no pause events by design', () => {
-    const issues = validateCatalog(BASE_CATALOG);
-    expect(issues.filter((i) => i.severity === 'error')).toEqual([]);
-    expect(new Set(issues.map((i) => i.subject))).toEqual(new Set(['transit_ferry', 'transit_rail']));
+  it('the base catalog has no issues', () => {
+    expect(validateCatalog(BASE_CATALOG)).toEqual([]);
   });
 
   it('reports a requirement that refers to a missing event', () => {

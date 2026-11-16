@@ -120,7 +120,7 @@ describe('order of stages', () => {
   it('lets the dispatcher skip a point; the transit after it is skipped too', () => {
     const t = buildTrip([
       { id: 'a', typeCode: 'waypoint' },
-      { id: 'b', typeCode: 'fuel' },
+      { id: 'b', typeCode: 'depot' },
       { id: 'c', typeCode: 'waypoint' },
     ]);
     const j = new Journal();
@@ -233,20 +233,20 @@ describe('requirements before a phase', () => {
   });
 });
 
-describe('ferry crossing', () => {
+describe('ferry with the driver on board (embark → disembark)', () => {
   const trip = buildTrip([
-    { id: 'port1', typeCode: 'ferry_port_departure' },
-    { id: 'port2', typeCode: 'ferry_port_arrival' },
+    { id: 'port1', typeCode: 'embark' },
+    { id: 'port2', typeCode: 'disembark' },
     { id: 'unload', typeCode: 'unloading' },
   ]);
 
-  it('inserts a ferry transit between the ports and a road transit after', () => {
-    expect(trip.stages.map((s) => s.typeCode)).toEqual([
-      'ferry_port_departure',
-      'transit_ferry',
-      'ferry_port_arrival',
-      'transit_road',
-      'unloading',
+  it('inserts one transit type; the one between embark and disembark goes by ferry', () => {
+    expect(trip.stages.map((s) => [s.typeCode, s.mode])).toEqual([
+      ['embark', undefined],
+      ['transit', 'ferry'],
+      ['disembark', undefined],
+      ['transit', 'road'],
+      ['unloading', undefined],
     ]);
   });
 
@@ -256,32 +256,124 @@ describe('ferry crossing', () => {
     j.driver('checked_in', 'port1', { values: { booking: 'B-77' } });
     j.driver('boarding', 'port1', { attachments: photos('port1:ferry_ticket', 1) });
     j.driver('on_board', 'port1');
-    j.driver('vessel_departed', 'port1~port2');
+    j.driver('carrier_departed', 'port1~port2');
     j.driver('disembarked', 'port2');
     j.driver('departed', 'port2');
     const r = evaluateTrip(trip, j.events, BASE_CATALOG);
     expect(conflicts(r)).toEqual([]);
-    expect(r.stages.slice(0, 4).map((s) => [s.id, s.state, s.phase])).toEqual([
-      ['port1', 'passed', 'departed'],
-      ['port1~port2', 'passed', 'completed'],
-      ['port2', 'passed', 'departed'],
-      ['port2~unload', 'in_progress', 'started'],
+    expect(r.stages.slice(0, 4).map((s) => [s.id, s.state, s.phase, s.mode])).toEqual([
+      ['port1', 'passed', 'departed', undefined],
+      ['port1~port2', 'passed', 'completed', 'ferry'],
+      ['port2', 'passed', 'departed', undefined],
+      ['port2~unload', 'in_progress', 'started', 'road'],
     ]);
   });
 
-  it('has no pauses on the ferry: road pause events are out of scope there', () => {
+  it('road events are out of scope on the ferry', () => {
     const j = new Journal();
     j.driver('arrived', 'port1');
     j.driver('boarding', 'port1', { attachments: photos('port1:ferry_ticket', 1) });
     j.driver('on_board', 'port1');
     const rest = j.driver('rest_started', 'port1~port2', { values: { reason: 'short' } });
     const r = evaluateTrip(trip, j.events, BASE_CATALOG);
-    expect(r.events.find((e) => e.eventId === rest.id)?.conflict).toEqual({ reason: 'out_of_scope', details: ['transit_mode'] });
+    expect(r.events.find((e) => e.eventId === rest.id)?.conflict).toEqual({ reason: 'out_of_scope', details: ['transport_mode'] });
+  });
+});
+
+describe('fast border crossing (border_open)', () => {
+  const trip = buildTrip([
+    { id: 'load', typeCode: 'waypoint' },
+    { id: 'pl-de', typeCode: 'border_open' },
+    { id: 'unload', typeCode: 'waypoint' },
+  ]);
+
+  it('one button "passed"', () => {
+    const j = new Journal();
+    j.driver('arrived', 'load');
+    j.driver('departed', 'load');
+    j.driver('border_passed', 'pl-de');
+    const r = evaluateTrip(trip, j.events, BASE_CATALOG);
+    expect(conflicts(r)).toEqual([]);
+    expect(stage(r, 'pl-de')).toMatchObject({ state: 'passed', phase: 'departed' });
+    expect(stage(r, 'pl-de').autoPassed).toBeUndefined();
+    expect(r.currentStageId).toBe('pl-de~unload');
+  });
+
+  it('closes by itself when the driver arrives further without pressing it', () => {
+    const j = new Journal();
+    j.driver('arrived', 'load');
+    j.driver('departed', 'load');
+    const arrival = j.driver('arrived', 'unload');
+    const r = evaluateTrip(trip, j.events, BASE_CATALOG);
+    expect(conflicts(r)).toEqual([]);
+    expect(r.stages.map((s) => [s.id, s.state])).toEqual([
+      ['load', 'passed'],
+      ['load~pl-de', 'passed'],
+      ['pl-de', 'passed'],
+      ['pl-de~unload', 'passed'],
+      ['unload', 'in_progress'],
+    ]);
+    expect(stage(r, 'pl-de').autoPassed).toBe(true);
+    expect(r.events.find((e) => e.eventId === arrival.id)?.effects).toEqual([
+      'stage:load~pl-de completed',
+      'stage:pl-de passed automatically',
+      'stage:pl-de~unload completed',
+    ]);
+  });
+
+  it('a regular border post does not close by itself', () => {
+    const t = buildTrip([
+      { id: 'a', typeCode: 'waypoint' },
+      { id: 'exit', typeCode: 'border_exit' },
+      { id: 'b', typeCode: 'waypoint' },
+    ]);
+    const j = new Journal();
+    j.driver('arrived', 'a');
+    j.driver('departed', 'a');
+    const jump = j.driver('arrived', 'b');
+    const r = evaluateTrip(t, j.events, BASE_CATALOG);
+    expect(r.events.find((e) => e.eventId === jump.id)?.conflict).toEqual({ reason: 'order_violation', details: ['exit'] });
+  });
+});
+
+describe('handover → takeover: the responsible person changes', () => {
+  // Driver 1 hands the cargo over at the warehouse; driver 2 takes it over and leads on.
+  const trip = {
+    ...buildTrip([
+      { id: 'hand', typeCode: 'handover' },
+      { id: 'take', typeCode: 'takeover' },
+      { id: 'unload', typeCode: 'unloading' },
+    ]),
+  };
+  const stages = trip.stages.map((s) => (s.id === 'take' ? { ...s, assigneeId: 'driver-2' } : s));
+  const twoDrivers = { ...trip, stages };
+  const asDriver2 = { authorId: 'driver-2' };
+
+  it('has no transit between handover and takeover', () => {
+    expect(twoDrivers.stages.map((s) => s.typeCode)).toEqual(['handover', 'takeover', 'transit', 'unloading']);
+  });
+
+  it('the receiving driver leads the rest of the trip', () => {
+    const j = new Journal();
+    j.driver('arrived', 'hand');
+    j.driver('handover_started', 'hand');
+    j.driver('photo_process', 'hand', { attachments: photos('hand:transfer_photos', 4) });
+    j.driver('handed_over', 'hand', { values: { transferred: ['cargo', 'trailer'], to: 'Склад Северный' } });
+    j.driver('departed', 'hand', { attachments: document('hand:transfer_act') });
+
+    // Driver 1 cannot take the cargo over for driver 2.
+    const wrong = j.driver('arrived', 'take');
+    j.add('driver', 'arrived', 'take', asDriver2);
+    const r = evaluateTrip(twoDrivers, j.events, BASE_CATALOG);
+    expect(r.events.find((e) => e.eventId === wrong.id)?.conflict).toEqual({ reason: 'out_of_scope', details: ['assignee'] });
+    expect(stage(r, 'hand').assigneeId).toBe('driver-1');
+    expect(r.stages.slice(1).map((s) => s.assigneeId)).toEqual(['driver-2', 'driver-2', 'driver-2']);
+    expect(stage(r, 'take').phase).toBe('arrived');
   });
 });
 
 describe('customs with detention', () => {
-  const trip = buildTrip([{ id: 'cus', typeCode: 'customs_export' }]);
+  const trip = buildTrip([{ id: 'cus', typeCode: 'export_clearance' }]);
 
   it('detained / lifted are pause / resume with the reason kept', () => {
     const j = new Journal();

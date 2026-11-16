@@ -11,6 +11,7 @@ const StageBody = Type.Object({
   externalId: Type.Optional(Type.String()),
   place: Type.Optional(Ref),
   assigneeId: Type.Optional(Type.String({ format: 'uuid' })),
+  mode: Type.Optional(Type.Union(['road', 'ferry', 'rail', 'air'].map((m) => Type.Literal(m)))),
   tags: Type.Optional(Type.Array(Type.String())),
   details: Type.Optional(Loose),
   requirements: Type.Optional(Type.Array(Loose)),

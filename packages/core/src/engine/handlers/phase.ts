@@ -22,17 +22,34 @@ import {
 } from './context.js';
 
 /**
- * Previous stages must be finished. The one exception: an in-progress transit
- * right before a point is completed automatically by the arrival.
+ * Previous stages must be finished, with two things a point closes by itself:
+ * the transit in progress before it, and marks the driver passed without
+ * pressing the button (autoPass points, e.g. a fast border crossing) together
+ * with the transits around them.
  */
-function checkEntry(run: TripRun, stage: StageRun): { autoComplete?: StageRun } | Rejected {
+function checkEntry(run: TripRun, stage: StageRun): { closeOnEntry: StageRun[] } | Rejected {
   const open = run.stages.slice(0, stage.index).filter((s) => !isClosedState(s.state));
-  const [first] = open;
-  if (!first) return {};
-  if (open.length === 1 && first.state === 'in_progress' && first.type.kind === 'transit' && stage.type.kind === 'point') {
-    return { autoComplete: first };
+  if (open.length === 0) return { closeOnEntry: [] };
+  if (stage.type.kind !== 'point') return reject('order_violation', [(open[0] as StageRun).input.id]);
+
+  const closable = (s: StageRun, i: number) =>
+    (s.type.kind === 'transit' && (s.state === 'ahead' || (i === 0 && s.state === 'in_progress'))) ||
+    (s.type.kind === 'point' && s.type.autoPass === true && s.state === 'ahead');
+  const blocker = open.find((s, i) => !closable(s, i));
+  return blocker ? reject('order_violation', [blocker.input.id]) : { closeOnEntry: open };
+}
+
+/** Closes a stage the driver has moved past. */
+function closeAutomatically(stage: StageRun, at: number): string {
+  if (stage.type.kind === 'transit') {
+    if (stage.phase === null) enterPhase(stage, 'started', at);
+    enterPhase(stage, 'completed', at);
+    return `stage:${stage.input.id} completed`;
   }
-  return reject('order_violation', [first.input.id]);
+  enterPhase(stage, FINAL_PHASE[stage.type.profile], at);
+  stage.autoPassed = true;
+  markNotApplicable(stage);
+  return `stage:${stage.input.id} passed automatically`;
 }
 
 /** Leaving a point right after arrival, without doing the work. */
@@ -66,11 +83,6 @@ function startNextTransit(run: TripRun, stage: StageRun, at: number): string[] {
   return [`stage:${next.input.id} started`];
 }
 
-function completeTransit(transit: StageRun, at: number): string[] {
-  enterPhase(transit, 'completed', at);
-  return [`stage:${transit.input.id} completed`];
-}
-
 export const phaseHandler: Handler = (ctx) => {
   const target = ctx.type.setsPhase;
   if (!target) return reject('invalid_transition', ['event type has no target phase']);
@@ -87,11 +99,11 @@ export const phaseHandler: Handler = (ctx) => {
   if (transition) return transition;
   if (ctx.ev.forced && ctx.mode === 'apply' && !hasReason(ctx)) return reject('reason_required');
 
-  let autoComplete: StageRun | undefined;
+  let closeOnEntry: StageRun[] = [];
   if (stage.phase === null) {
     const entry = checkEntry(ctx.run, stage);
     if (isRejected(entry)) return entry;
-    autoComplete = entry.autoComplete;
+    closeOnEntry = entry.closeOnEntry;
   }
 
   if (target === FINAL_PHASE[stage.type.profile] && !ctx.ev.forced) {
@@ -114,7 +126,7 @@ export const phaseHandler: Handler = (ctx) => {
     ...(unmet.length > 0 ? { requirementsUnmet: unmet } : {}),
     ...(gated.warnings.length > 0 ? { warnings: gated.warnings.map((r) => r.spec.id) } : {}),
     apply: () => {
-      const effects = autoComplete ? completeTransit(autoComplete, ctx.at) : [];
+      const effects = closeOnEntry.map((s) => closeAutomatically(s, ctx.at));
       const reason = ctx.ev.values?.['reason'];
       enterPhase(stage, target, ctx.at, typeof reason === 'string' ? { reason } : {});
       if (withoutWork) markNotApplicable(stage);

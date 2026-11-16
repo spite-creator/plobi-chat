@@ -10,7 +10,7 @@ import { deriveTripState } from '../machines/trip-state.js';
 import { HANDLERS } from './handlers/index.js';
 import { reject, type Outcome } from './handlers/context.js';
 import { isFulfilled, isVisible, measure, strictnessOf } from './requirements.js';
-import { createRun, currentStage, findStage, type StageRun, type TripRun } from './run.js';
+import { createRun, currentStage, effectiveAssignee, effectiveMode, findStage, type StageRun, type TripRun } from './run.js';
 import type { EventInput, EventResult, StageResult, TripInput, TripResult } from './types.js';
 
 const iso = (ms: number | undefined): string | undefined => (ms === undefined ? undefined : new Date(ms).toISOString());
@@ -59,7 +59,7 @@ export function replay(trip: TripInput, events: readonly EventInput[], catalog: 
   return { run, results };
 }
 
-function stageResult(stage: StageRun): StageResult {
+function stageResult(run: TripRun, stage: StageRun): StageResult {
   return {
     id: stage.input.id,
     typeCode: stage.type.code,
@@ -67,6 +67,9 @@ function stageResult(stage: StageRun): StageResult {
     profile: stage.type.profile,
     state: stage.state,
     phase: stage.phase,
+    assigneeId: effectiveAssignee(run, stage),
+    mode: effectiveMode(stage),
+    ...(stage.autoPassed ? { autoPassed: true } : {}),
     arrivedAt: iso(stage.arrivedAt),
     startedAt: iso(stage.startedAt),
     completedAt: iso(stage.completedAt),
@@ -101,7 +104,7 @@ function stageResult(stage: StageRun): StageResult {
 
 export function evaluateTrip(trip: TripInput, events: readonly EventInput[], catalog: Catalog): TripResult {
   const { run, results } = replay(trip, events, catalog);
-  const stages = run.stages.map(stageResult);
+  const stages = run.stages.map((s) => stageResult(run, s));
   return {
     state: deriveTripState(
       { hasDriver: trip.driverId !== undefined, ...run.flags },

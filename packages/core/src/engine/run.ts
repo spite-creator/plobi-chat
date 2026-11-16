@@ -2,7 +2,7 @@
  * Mutable runtime model used while replaying the event journal.
  * Nothing outside the engine sees it; results are copied into plain objects.
  */
-import type { Catalog, StageType } from '../catalog/types.js';
+import type { Catalog, StageType, TransportMode } from '../catalog/types.js';
 import { stateForPhase, type StageState } from '../machines/stage-state.js';
 import type { Phase } from '../machines/phase.js';
 import type { ScopeStage } from './scope.js';
@@ -37,6 +37,8 @@ export interface StageRun {
   readonly tags: ReadonlySet<string>;
   state: StageState;
   phase: Phase | null;
+  /** Closed automatically because a later point was reached without marking it. */
+  autoPassed?: boolean;
   arrivedAt?: number;
   startedAt?: number;
   completedAt?: number;
@@ -113,15 +115,32 @@ export function currentStage(run: TripRun): StageRun | undefined {
   return run.stages.find((s) => s.state === 'in_progress');
 }
 
+/**
+ * Who does the stage: its own assignee, else the nearest previous stage's,
+ * else the trip driver. So after a takeover the receiving driver leads on.
+ */
+export function effectiveAssignee(run: TripRun, stage: StageRun): string | undefined {
+  for (let i = stage.index; i >= 0; i--) {
+    const own = run.stages[i]?.input.assigneeId;
+    if (own) return own;
+  }
+  return run.trip.driverId;
+}
+
+/** Transport of a stage; a transit without one goes by road. */
+export function effectiveMode(stage: StageRun): TransportMode | undefined {
+  return stage.input.mode ?? (stage.type.kind === 'transit' ? 'road' : undefined);
+}
+
 export function scopeStage(run: TripRun, stage: StageRun): ScopeStage {
   return {
     kind: stage.type.kind,
     typeCode: stage.type.code,
-    transitMode: stage.type.transitMode,
+    mode: effectiveMode(stage),
     phase: stage.phase,
     state: stage.state,
     tags: stage.tags,
-    assigneeId: stage.input.assigneeId ?? run.trip.driverId,
+    assigneeId: effectiveAssignee(run, stage),
   };
 }
 

@@ -26,7 +26,7 @@ export function buildTrip(
   return { id: 'trip-1', driverId: options.driverId ?? 'driver-1', tags, stages };
 }
 
-type Extra = Partial<Omit<EventInput, 'typeCode' | 'stageId' | 'authorRole' | 'authorId'>>;
+type Extra = Partial<Omit<EventInput, 'typeCode' | 'stageId' | 'authorRole'>>;
 
 /** Event journal with a clock that moves forward by default 10 minutes per event. */
 export class Journal {

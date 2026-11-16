@@ -18,7 +18,7 @@ export * from './engine/types.js';
 export { evaluateTrip, orderEvents } from './engine/evaluate.js';
 export { availableEvents, type AvailableEvent, type AvailableQuery } from './engine/available.js';
 export { ACKNOWLEDGE_EVENT, isVisible, materializeRequirements } from './engine/requirements.js';
-export { insertTransits, defaultTransitRule, type TransitRule } from './engine/route.js';
+export { insertTransits, defaultTransitRule, TRANSIT_TYPE, type TransitRule } from './engine/route.js';
 export { missingFields } from './engine/fields.js';
 export { checkScope, type ScopeLabel } from './engine/scope.js';
 export { UnknownStageTypeError } from './engine/run.js';

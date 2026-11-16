@@ -67,7 +67,7 @@ describe('creating a trip', () => {
     const trip = await createTrip();
     expect(trip.stages.map((s: any) => [s.typeCode, s.isAuto])).toEqual([
       ['loading', false],
-      ['transit_road', true],
+      ['transit', true],
       ['unloading', false],
     ]);
     const loading = trip.stages[0];

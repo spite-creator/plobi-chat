@@ -19,45 +19,35 @@ const byCode = <T extends { code: string }>(items: readonly T[]): Record<string,
 
 // ---------- stage types ----------
 
-const point = (code: string, name: string, profile: StageType['profile'], departWithoutWork: StageType['departWithoutWork']): StageType => ({
-  code,
-  name: ru(name),
-  kind: 'point',
-  profile,
-  departWithoutWork,
-});
+const point = (
+  code: string,
+  name: string,
+  profile: StageType['profile'],
+  departWithoutWork: StageType['departWithoutWork'],
+  extra: Partial<StageType> = {},
+): StageType => ({ code, name: ru(name), kind: 'point', profile, departWithoutWork, ...extra });
 
-const transit = (code: string, name: string, transitMode: StageType['transitMode']): StageType => ({
-  code,
-  name: ru(name),
-  kind: 'transit',
-  profile: 'transit',
-  transitMode,
-});
-
+/**
+ * Two questions keep the point types apart:
+ * - Does the driver stay with the cargo? Yes → embark / disembark (accompanied).
+ *   No → handover / takeover (responsibility changes; no transit in between).
+ * - Is it planned? Checks, weighing, crew change, trailer drop are not points but events.
+ */
 const STAGE_TYPES: StageType[] = [
+  point('depot', 'База / гараж', 'point_simple', 'allow'),
   point('loading', 'Погрузка', 'point_split', 'with_reason'),
+  point('export_clearance', 'Экспортное оформление', 'point_split', 'deny'),
+  point('border_exit', 'Выезд через погранпереход', 'point_single', 'deny'),
+  point('border_entry', 'Въезд через погранпереход', 'point_single', 'deny'),
+  point('border_open', 'Быстрый погранпереход', 'point_mark', 'allow', { autoPass: true }),
+  point('embark', 'Посадка на паром / поезд вместе с машиной', 'point_single', 'with_reason'),
+  point('disembark', 'Высадка с парома / поезда', 'point_simple', 'allow'),
+  point('handover', 'Сдача груза / прицепа / машины', 'point_split', 'with_reason', { noTransitAfter: true }),
+  point('takeover', 'Приём груза / прицепа / машины', 'point_split', 'with_reason'),
+  point('import_clearance', 'Импортное оформление', 'point_split', 'deny'),
   point('unloading', 'Выгрузка', 'point_split', 'with_reason'),
-  point('customs_export', 'Экспортная таможня', 'point_split', 'deny'),
-  point('customs_import', 'Импортная таможня', 'point_split', 'deny'),
-  point('customs_transit_open', 'Открытие транзита (T1/TIR)', 'point_split', 'deny'),
-  point('customs_transit_close', 'Закрытие транзита', 'point_split', 'deny'),
-  point('control', 'Фито / вет / санконтроль', 'point_split', 'with_reason'),
-  point('border', 'Пересечение границы', 'point_single', 'deny'),
-  point('weighing', 'Взвешивание', 'point_single', 'with_reason'),
-  point('ferry_port_departure', 'Порт отправления (паром)', 'point_single', 'with_reason'),
-  point('ferry_port_arrival', 'Порт прибытия (паром)', 'point_simple', 'allow'),
-  point('rail_terminal_departure', 'Ж/д терминал отправления', 'point_single', 'with_reason'),
-  point('rail_terminal_arrival', 'Ж/д терминал прибытия', 'point_single', 'allow'),
-  point('trailer_drop', 'Отцепка прицепа', 'point_single', 'deny'),
-  point('trailer_pickup', 'Сцепка прицепа', 'point_single', 'deny'),
-  point('crew_change', 'Смена водителя', 'point_single', 'deny'),
-  point('parking', 'Плановая стоянка', 'point_simple', 'allow'),
-  point('fuel', 'Плановая заправка', 'point_simple', 'allow'),
   point('waypoint', 'Промежуточная точка', 'point_simple', 'allow'),
-  transit('transit_road', 'Транзит по дороге', 'road'),
-  transit('transit_ferry', 'Паром', 'ferry'),
-  transit('transit_rail', 'Поезд (контрейлер)', 'rail'),
+  { code: 'transit', name: ru('Транзит'), kind: 'transit', profile: 'transit' },
 ];
 
 // ---------- fields ----------
@@ -83,7 +73,8 @@ const phase = (code: string, name: string, setsPhase: EventType['setsPhase'], sc
   name: ru(name),
   action: 'phase',
   setsPhase,
-  scope: { roles: DRIVER, ...scope },
+  // Only the stage's assignee moves its phase: after a takeover, the receiving driver.
+  scope: { roles: DRIVER, assigneeOnly: true, ...scope },
   ...(fields ? { fields } : {}),
 });
 
@@ -106,11 +97,22 @@ const incident = (code: string, name: string, incidentType: string): EventType =
 });
 
 const POINT = { kinds: ['point'] } as const;
-const TRANSIT_ROAD = { kinds: ['transit'], transitModes: ['road'] } as const;
+const ROAD = { kinds: ['transit'], transportModes: ['road'] } as const;
+const CARRIED = { kinds: ['transit'], transportModes: ['ferry', 'rail', 'air'] } as const;
 const types = (...codes: string[]) => ({ stageTypes: codes });
+const CLEARANCE = ['export_clearance', 'import_clearance'];
+const BORDER = ['border_exit', 'border_entry'];
+const CARGO_WORK = ['loading', 'unloading', 'handover', 'takeover'];
+/** What a handover / takeover transfers. */
+const transferred: EventField = {
+  key: 'transferred',
+  kind: 'multiselect',
+  required: true,
+  options: ['cargo', 'trailer', 'tractor', 'container', 'documents'],
+};
 
 const EVENT_TYPES: EventType[] = [
-  // universal point events
+  // universal point events (only the assignee of the stage marks them)
   phase('arrived', 'Прибыл', 'arrived', POINT),
   phase('work_started', 'Начато', 'started', POINT),
   phase('paused', 'Приостановлено', 'paused', POINT, [reason()]),
@@ -123,49 +125,66 @@ const EVENT_TYPES: EventType[] = [
   phase('loaded', 'Погружен', 'completed', types('loading')),
   phase('unloading_started', 'Начало выгрузки', 'started', types('unloading')),
   phase('unloaded', 'Выгружен', 'completed', types('unloading')),
-  detail('queue_joined', 'Встал в очередь', { ...types('loading', 'unloading', 'customs_export', 'customs_import', 'border'), phases: ['arrived'] }),
-  detail('at_dock', 'Поставлен на рампу', { ...types('loading', 'unloading'), phases: ['arrived'] }, [{ key: 'dock', kind: 'text' }]),
+  detail('queue_joined', 'Встал в очередь', { ...types(...CARGO_WORK, ...CLEARANCE, ...BORDER, 'embark'), phases: ['arrived'] }),
+  detail('at_dock', 'Поставлен на рампу', { ...types(...CARGO_WORK), phases: ['arrived'] }, [{ key: 'dock', kind: 'text' }]),
   detail('photo_process', 'Фото процесса', { ...POINT, phases: [...WORKING_OR_PAUSED, 'completed'] }, [photos()]),
-  detail('seal_set', 'Пломба установлена', { ...types('loading', 'trailer_pickup', 'trailer_drop'), phases: ['completed', ...WORKING] }, [
+  detail('seal_set', 'Пломба установлена', { ...types('loading', 'handover', 'takeover'), phases: ['completed', ...WORKING] }, [
     { key: 'seal_number', kind: 'scan', required: true },
     photos(),
   ]),
-  detail('docs_received', 'Документы получены', { ...types('loading', 'unloading'), phases: ['completed'] }, [
+  detail('docs_received', 'Документы получены', { ...types(...CARGO_WORK), phases: ['completed'] }, [
     { key: 'documents', kind: 'document', required: true },
   ]),
 
-  // customs
-  phase('docs_submitted', 'Подал документы', 'started', types('customs_export', 'customs_import', 'customs_transit_open', 'customs_transit_close', 'control')),
-  phase('detained', 'Задержан', 'paused', types('customs_export', 'customs_import', 'customs_transit_open', 'customs_transit_close'), [reason()]),
-  phase('detention_lifted', 'Задержание снято', 'resumed', types('customs_export', 'customs_import', 'customs_transit_open', 'customs_transit_close')),
-  phase('released', 'Выпуск', 'completed', types('customs_export', 'customs_import', 'customs_transit_open', 'customs_transit_close', 'control')),
+  // handover / takeover: the responsible person changes here
+  phase('handover_started', 'Начало сдачи', 'started', types('handover')),
+  phase('handed_over', 'Сдано', 'completed', types('handover'), [transferred, { key: 'to', kind: 'text' }]),
+  phase('takeover_started', 'Начало приёма', 'started', types('takeover')),
+  phase('taken_over', 'Принято', 'completed', types('takeover'), [transferred, { key: 'remarks', kind: 'text' }]),
+
+  // customs clearance
+  phase('docs_submitted', 'Подал документы', 'started', types(...CLEARANCE)),
+  phase('detained', 'Задержан', 'paused', types(...CLEARANCE), [reason()]),
+  phase('detention_lifted', 'Задержание снято', 'resumed', types(...CLEARANCE)),
+  phase('released', 'Выпуск', 'completed', types(...CLEARANCE)),
 
   // border
-  phase('border_control_started', 'Начат контроль', 'started', types('border')),
-  phase('border_crossed', 'Границу пересёк', 'departed', types('border')),
+  detail('border_queue', 'Очередь на границе', { ...types(...BORDER), phases: ['arrived'] }),
+  phase('border_control_started', 'Начат контроль', 'started', types(...BORDER)),
+  phase('border_crossed', 'Границу пересёк', 'departed', types(...BORDER)),
+  phase('border_passed', 'Пройдено', 'departed', types('border_open')),
 
-  // ferry
-  detail('checked_in', 'Регистрация', { ...types('ferry_port_departure', 'rail_terminal_departure'), phases: ['arrived'] }, [
+  // embark / disembark: the driver travels with the cargo
+  detail('checked_in', 'Регистрация', { ...types('embark'), phases: ['arrived'] }, [
     { key: 'booking', kind: 'text' },
     photos(1, false),
   ]),
-  phase('boarding', 'Посадка', 'started', types('ferry_port_departure')),
-  phase('on_board', 'На борту', 'departed', types('ferry_port_departure')),
-  phase('disembarked', 'Съехал с парома', 'arrived', types('ferry_port_arrival')),
-  detail('vessel_departed', 'Отплытие', { kinds: ['transit'], transitModes: ['ferry', 'rail'] }),
-  detail('vessel_delayed', 'Задержка парома / поезда', { kinds: ['transit'], transitModes: ['ferry', 'rail'] }, [
-    { key: 'new_time', kind: 'datetime', required: true },
-  ]),
+  phase('boarding', 'Посадка', 'started', types('embark')),
+  phase('on_board', 'На борту', 'departed', types('embark')),
+  phase('disembarked', 'Съехал', 'arrived', types('disembark')),
+  detail('carrier_departed', 'Отправление судна / поезда', CARRIED),
+  detail('carrier_delayed', 'Задержка судна / поезда', CARRIED, [{ key: 'new_time', kind: 'datetime', required: true }]),
 
   // road transit
-  phase('rest_started', 'Начал отдых', 'paused', TRANSIT_ROAD, [
+  phase('rest_started', 'Начал отдых', 'paused', ROAD, [
     { key: 'reason', kind: 'select', required: true, options: ['short', 'daily', 'weekly'] },
   ]),
-  phase('stopped', 'Остановка', 'paused', TRANSIT_ROAD, [
+  phase('stopped', 'Остановка', 'paused', ROAD, [
     reason(['traffic', 'police', 'weather', 'road_closed', 'other']),
     { key: 'comment', kind: 'text', required: true, showIf: { reason: 'other' } },
   ]),
-  phase('moving_resumed', 'Продолжил движение', 'resumed', TRANSIT_ROAD),
+  phase('moving_resumed', 'Продолжил движение', 'resumed', ROAD),
+
+  // unplanned things that happen on the way: events, not points
+  detail('inspection', 'Контроль (фито / вет / сан / полиция)', {}, [
+    { key: 'kind', kind: 'select', required: true, options: ['phyto', 'veterinary', 'sanitary', 'police', 'other'] },
+    photos(1, false),
+    comment,
+  ]),
+  detail('weighing', 'Взвешивание', {}, [{ key: 'weight_kg', kind: 'number', required: true }, photos(1, false)]),
+  detail('crew_change', 'Смена водителя', {}, [{ key: 'new_driver', kind: 'text', required: true }, comment]),
+  detail('trailer_dropped', 'Отцепил прицеп', {}, [{ key: 'trailer', kind: 'text', required: true }, photos()]),
+  detail('trailer_coupled', 'Прицепил прицеп', {}, [{ key: 'trailer', kind: 'text', required: true }, photos()]),
 
   // information
   detail('eta_update', 'Новое ETA', { states: ['in_progress'] }, [{ key: 'eta', kind: 'datetime', required: true }, comment]),
@@ -177,7 +196,7 @@ const EVENT_TYPES: EventType[] = [
     { key: 'requirementId', kind: 'text', required: true },
     { key: 'revision', kind: 'number', required: true },
   ]),
-  detail('fuel_receipt', 'Заправка', { kinds: ['transit'] }, [
+  detail('fuel_receipt', 'Заправка', ROAD, [
     { key: 'liters', kind: 'number', required: true },
     { key: 'receipt', kind: 'photo', required: true },
   ]),
@@ -223,7 +242,8 @@ const REQUIREMENT_TEMPLATES: RequirementTemplate[] = [
   { code: 'unloading_process_photos', title: ru('Фото процесса выгрузки'), kind: 'photo', min: 3, cameraOnly: true, captureFromPhase: 'started', beforePhase: 'departed', strictness: 'block', waivable: true },
   { code: 'proof_of_delivery', title: ru('Подписанная CMR при выгрузке'), kind: 'document', beforePhase: 'departed', strictness: 'block', waivable: true },
   { code: 'customs_release_docs', title: ru('Документы о выпуске'), kind: 'document', beforePhase: 'departed', strictness: 'block', waivable: true },
-  { code: 'trailer_photos', title: ru('Фото прицепа со всех сторон'), kind: 'photo', min: 4, cameraOnly: true, beforePhase: 'departed', strictness: 'block', waivable: true },
+  { code: 'transfer_photos', title: ru('Фото груза / прицепа при передаче'), kind: 'photo', min: 4, cameraOnly: true, captureFromPhase: 'started', beforePhase: 'completed', strictness: 'block', waivable: true },
+  { code: 'transfer_act', title: ru('Акт приёма-передачи'), kind: 'document', beforePhase: 'departed', strictness: 'block', waivable: true },
   { code: 'ferry_ticket', title: ru('Фото билета / брони'), kind: 'photo', beforePhase: 'started', strictness: 'warn', waivable: true },
   { code: 'reefer_temperature', title: ru('Температура рефа'), kind: 'number', valueKey: 'temperature', beforePhase: 'departed', strictness: 'block', waivable: true },
   { code: 'adr_parking', title: ru('Опасный груз: не останавливаться у жилых домов и АЗС'), kind: 'acknowledgement', beforePhase: 'arrived', strictness: 'block', waivable: true },
@@ -239,12 +259,13 @@ const REQUIREMENT_RULES: RequirementRule[] = [
   { template: 'unloading_cargo_before', stageTypes: ['unloading'] },
   { template: 'unloading_process_photos', stageTypes: ['unloading'] },
   { template: 'proof_of_delivery', stageTypes: ['unloading'] },
-  { template: 'customs_release_docs', stageTypes: ['customs_export', 'customs_import'] },
-  { template: 'trailer_photos', stageTypes: ['trailer_pickup', 'trailer_drop'] },
-  { template: 'ferry_ticket', stageTypes: ['ferry_port_departure'] },
+  { template: 'customs_release_docs', stageTypes: ['export_clearance', 'import_clearance'] },
+  { template: 'transfer_photos', stageTypes: ['handover', 'takeover'] },
+  { template: 'transfer_act', stageTypes: ['handover', 'takeover'] },
+  { template: 'ferry_ticket', stageTypes: ['embark'] },
   { template: 'reefer_temperature', stageTypes: ['loading'], tagsRequired: ['reefer'] },
   { template: 'clean_body_photo', stageTypes: ['loading'], tagsRequired: ['food'] },
-  { template: 'adr_parking', tagsRequired: ['adr'] },
+  { template: 'adr_parking', stageTypes: ['loading'], tagsRequired: ['adr'] },
   { template: 'reefer_check', stageTypes: ['loading'], tagsRequired: ['reefer'] },
 ];
 

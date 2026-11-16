@@ -1,14 +1,14 @@
 /**
  * Scope labels check: may this user submit this event on this stage right now?
  */
-import type { EventScope, Role, StageKind, TransitMode } from '../catalog/types.js';
+import type { EventScope, Role, StageKind, TransportMode } from '../catalog/types.js';
 import type { Phase } from '../machines/phase.js';
 import type { StageState } from '../machines/stage-state.js';
 
 export type ScopeLabel =
   | 'kind'
   | 'stage_type'
-  | 'transit_mode'
+  | 'transport_mode'
   | 'phase'
   | 'state'
   | 'role'
@@ -19,7 +19,7 @@ export type ScopeLabel =
 export interface ScopeStage {
   readonly kind: StageKind;
   readonly typeCode: string;
-  readonly transitMode?: TransitMode;
+  readonly mode?: TransportMode;
   readonly phase: Phase | null;
   readonly state: StageState;
   /** Trip tags plus stage tags. */
@@ -39,7 +39,7 @@ export interface ScopeSubject {
 
 /** Labels that only make sense on a stage. */
 export function scopeNeedsStage(scope: EventScope | undefined): boolean {
-  return !!scope && !!(scope.kinds || scope.stageTypes || scope.transitModes || scope.phases || scope.states);
+  return !!scope && !!(scope.kinds || scope.stageTypes || scope.transportModes || scope.phases || scope.states);
 }
 
 const allowed = <T>(list: readonly T[] | undefined, value: T): boolean => !list || list.includes(value);
@@ -65,9 +65,7 @@ export function checkScope(
 
   if (!allowed(s.kinds, stage.kind)) failed.push('kind');
   if (!allowed(s.stageTypes, stage.typeCode)) failed.push('stage_type');
-  if (s.transitModes && (!stage.transitMode || !s.transitModes.includes(stage.transitMode))) {
-    failed.push('transit_mode');
-  }
+  if (s.transportModes && (!stage.mode || !s.transportModes.includes(stage.mode))) failed.push('transport_mode');
   if (!allowed(s.phases, stage.phase)) failed.push('phase');
   if (!allowed(s.states ?? defaults.states, stage.state)) failed.push('state');
 

@@ -58,6 +58,7 @@ CREATE TABLE "stages" (
 	"type_code" text NOT NULL,
 	"place_id" uuid,
 	"assignee_id" uuid,
+	"mode" text,
 	"is_auto" boolean DEFAULT false NOT NULL,
 	"tags" text[] DEFAULT '{}' NOT NULL,
 	"details" jsonb DEFAULT '{}'::jsonb NOT NULL,

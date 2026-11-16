@@ -10,7 +10,7 @@
 export const PHASES = ['arrived', 'started', 'paused', 'resumed', 'completed', 'departed'] as const;
 export type Phase = (typeof PHASES)[number];
 
-export const PROFILES = ['point_split', 'point_single', 'point_simple', 'transit'] as const;
+export const PROFILES = ['point_split', 'point_single', 'point_simple', 'point_mark', 'transit'] as const;
 export type Profile = (typeof PROFILES)[number];
 
 /** Virtual node: the stage has no phase yet. */
@@ -38,6 +38,8 @@ export const PROFILE_PHASES: Readonly<Record<Profile, readonly Phase[]>> = {
   point_split: ['arrived', 'started', 'paused', 'resumed', 'completed', 'departed'],
   point_single: ['arrived', 'started', 'paused', 'resumed', 'departed'],
   point_simple: ['arrived', 'departed'],
+  /** A mark on the route: one button "passed", e.g. a fast border crossing. */
+  point_mark: ['departed'],
   transit: ['started', 'paused', 'resumed', 'completed'],
 };
 
@@ -45,6 +47,7 @@ export const FINAL_PHASE: Readonly<Record<Profile, Phase>> = {
   point_split: 'departed',
   point_single: 'departed',
   point_simple: 'departed',
+  point_mark: 'departed',
   transit: 'completed',
 };
 
