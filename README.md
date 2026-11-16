@@ -23,6 +23,7 @@
 
 ## Документация
 
+- **[Этапы, состояния и фазы — справочник](docs/reference.md)**
 - [Архитектура и развёртывание](docs/architecture.md)
 - [Этапы: состояние, фаза и автоматы](docs/state-machine.md)
 - [События и требования](docs/events-and-requirements.md)
