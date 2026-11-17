@@ -23,8 +23,7 @@
 
 ## Документация
 
-- **[Портал: как устроен сейчас](docs/overview.md)**
-- [API загрузки данных (ingest)](docs/ingest-api.md)
+- **[Plobi: как устроено сейчас](docs/overview.md)**
 - **[Этапы, состояния и фазы — справочник](docs/reference.md)**
 - [Архитектура и развёртывание](docs/architecture.md)
 - [Этапы: состояние, фаза и автоматы](docs/state-machine.md)
