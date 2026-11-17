@@ -23,6 +23,8 @@
 
 ## Документация
 
+- **[Портал: как устроен сейчас](docs/overview.md)**
+- [API загрузки данных (ingest)](docs/ingest-api.md)
 - **[Этапы, состояния и фазы — справочник](docs/reference.md)**
 - [Архитектура и развёртывание](docs/architecture.md)
 - [Этапы: состояние, фаза и автоматы](docs/state-machine.md)
@@ -30,7 +32,7 @@
 - [Места](docs/places.md)
 - [Модель данных](docs/domain-model.md)
 - [API](docs/api.md)
-- [Базовые справочники этапов и событий](docs/base-catalog.md)
+- [Базовые события](docs/base-catalog.md)
 - [Принципы разработки](docs/engineering.md)
 - [План работ (roadmap)](docs/roadmap.md)
 
