@@ -21,13 +21,13 @@ export interface StageType {
   readonly kind: StageKind;
   readonly profile: Profile;
   readonly departWithoutWork?: DepartWithoutWork;
-  /**
-   * The point closes by itself when the driver arrives at a later point
-   * without marking it (e.g. a fast border crossing: a route hint).
-   */
-  readonly autoPass?: boolean;
   /** No transit is inserted after this point (e.g. handover → takeover from the warehouse). */
   readonly noTransitAfter?: boolean;
+  /**
+   * The cargo changes hands here (handover): the route is split into segments
+   * after such stages, and events look for their stage on the current segment.
+   */
+  readonly endsSegment?: boolean;
 }
 
 /** What an event does. Each action has its own handler in the engine. */
@@ -86,12 +86,27 @@ export interface EventField {
   readonly showIf?: Readonly<Record<string, unknown>>;
 }
 
+/**
+ * Which stage an event belongs to. The engine finds it; the sender does not name it.
+ * - point: the nearest stage ahead of one of `scope.stageTypes` that the phase still fits;
+ * - road:  the transit after the current point (while still at the point — the point itself);
+ * - here:  the current stage.
+ */
+export type Placement = 'point' | 'road' | 'here';
+
+/** Who is to blame for a stop. The manager decides finally; until then it is preliminary. */
+export type Fault = 'customer' | 'carrier' | 'external';
+
 export interface EventType {
   readonly code: string;
   readonly name: LocalizedText;
   readonly action: EventAction;
   /** For action = phase. */
   readonly setsPhase?: Phase;
+  /** How the engine finds the stage. Without it the event must name its stage (stageId). */
+  readonly placement?: Placement;
+  /** Stop events: the event itself is the reason of the pause; this is its default fault. */
+  readonly defaultFault?: Fault;
   /** For incident actions. */
   readonly incidentType?: string;
   readonly scope?: EventScope;

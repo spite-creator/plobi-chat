@@ -1,5 +1,5 @@
 {
-  "id": "4a087e57-3fc9-4343-9ab8-d4af916f087a",
+  "id": "765c2a9e-b70b-489d-afb6-2284e77de5a9",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -547,6 +547,24 @@
           "primaryKey": false,
           "notNull": true,
           "default": false
+        },
+        "cancelled_at": {
+          "name": "cancelled_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cancelled_by": {
+          "name": "cancelled_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cancel_reason": {
+          "name": "cancel_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "accept_unmet": {
           "name": "accept_unmet",

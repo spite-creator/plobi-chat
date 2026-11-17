@@ -11,7 +11,8 @@ import { tripAcceptHandler, tripCancelHandler, tripCloseHandler } from './trip-a
 
 export const HANDLERS: Readonly<Record<EventAction, Handler>> = {
   phase: phaseHandler,
-  detail: detailHandler,
+  // Details with a placement go where the engine puts them; others name their stage.
+  detail: (ctx) => (ctx.type.placement ? phaseHandler(ctx) : detailHandler(ctx)),
   skip: skipHandler,
   waive: waiveHandler,
   incident_open: incidentOpenHandler,

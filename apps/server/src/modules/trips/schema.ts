@@ -69,6 +69,10 @@ export const tripEvents = pgTable(
     values: jsonb('values').$type<Record<string, unknown>>().notNull().default({}),
     attachments: jsonb('attachments').$type<Attachment[]>().notNull().default([]),
     forced: boolean('forced').notNull().default(false),
+    /** A cancelled event stays in the journal for display and changes no phase. */
+    cancelledAt: timestamp('cancelled_at', { withTimezone: true, mode: 'string' }),
+    cancelledBy: uuid('cancelled_by'),
+    cancelReason: text('cancel_reason'),
     acceptUnmet: boolean('accept_unmet').notNull().default(false),
     source: text('source', { enum: ['app', 'api', 'system'] }).notNull().default('app'),
   },

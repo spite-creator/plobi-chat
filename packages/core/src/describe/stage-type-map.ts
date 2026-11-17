@@ -24,6 +24,8 @@ export interface StageTypeMap {
 /** Does an event's scope admit this stage type? Tags and transport mode are set per stage and ignored here. */
 export function eventFitsStageType(event: EventType, stageType: StageType): boolean {
   const s = event.scope ?? {};
+  // Road events belong to transits whatever their labels say.
+  if (event.placement === 'road') return stageType.kind === 'transit';
   return (
     (!s.kinds || s.kinds.includes(stageType.kind)) &&
     (!s.stageTypes || s.stageTypes.includes(stageType.code))

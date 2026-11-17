@@ -40,12 +40,20 @@ function step(run: TripRun, ev: EventInput): EventResult {
   if (!outcome.ok) {
     return { eventId: ev.id, typeCode: ev.typeCode, result: 'conflict', conflict: outcome.conflict, effects: [] };
   }
+  const placed = {
+    ...(outcome.stageId ? { stageId: outcome.stageId } : {}),
+    ...(outcome.note ? { note: outcome.note } : {}),
+  };
+  // A cancelled event is placed for display but changes nothing.
+  if (ev.cancelled) return { eventId: ev.id, typeCode: ev.typeCode, result: 'applied', ...placed, cancelled: true, effects: [] };
+
   const effects = outcome.apply();
-  findStage(run, ev.stageId)?.events.push({ input: ev, at: Date.parse(ev.occurredAt) });
+  findStage(run, outcome.stageId ?? ev.stageId)?.events.push({ input: ev, at: Date.parse(ev.occurredAt) });
   return {
     eventId: ev.id,
     typeCode: ev.typeCode,
     result: 'applied',
+    ...placed,
     ...(outcome.requirementsUnmet ? { requirementsUnmet: outcome.requirementsUnmet } : {}),
     ...(outcome.warnings ? { warnings: outcome.warnings } : {}),
     effects,
@@ -78,6 +86,7 @@ function stageResult(run: TripRun, stage: StageRun): StageResult {
       from: iso(p.from) as string,
       to: iso(p.to),
       reason: p.reason,
+      fault: p.fault,
       incidentId: p.incidentId,
     })),
     pausedMs: stage.pauses.reduce((sum, p) => sum + (p.to === undefined ? 0 : p.to - p.from), 0),

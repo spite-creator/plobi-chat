@@ -17,6 +17,7 @@ export interface PauseRun {
   from: number;
   to?: number;
   reason?: string;
+  fault?: string;
   incidentId?: string;
 }
 
@@ -37,7 +38,7 @@ export interface StageRun {
   readonly tags: ReadonlySet<string>;
   state: StageState;
   phase: Phase | null;
-  /** Closed automatically because a later point was reached without marking it. */
+  /** Reached its final phase by a rule, not by its own event. */
   autoPassed?: boolean;
   arrivedAt?: number;
   startedAt?: number;
@@ -67,6 +68,10 @@ export interface TripRun {
   readonly stages: StageRun[];
   readonly incidents: Map<string, IncidentRun>;
   readonly flags: { accepted: boolean; closed: boolean; cancelled: boolean };
+  /** Index of the current stage (where the vehicle is); -1 before the first event. */
+  cursor: number;
+  /** Accepted, not cancelled events: type and stage index (for repeats). */
+  readonly accepted: Array<{ code: string; stage: number }>;
 }
 
 export class UnknownStageTypeError extends Error {
@@ -104,6 +109,8 @@ export function createRun(trip: TripInput, catalog: Catalog): TripRun {
     stages,
     incidents: new Map(),
     flags: { accepted: false, closed: false, cancelled: false },
+    cursor: -1,
+    accepted: [],
   };
 }
 

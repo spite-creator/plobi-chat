@@ -68,12 +68,15 @@ export interface EventInput {
   readonly forced?: boolean;
   /** Driver chose to proceed although blocking requirements are unmet (offline). */
   readonly acceptUnmet?: boolean;
+  /** Cancelled events are placed for display but change no phase. */
+  readonly cancelled?: boolean;
 }
 
 // ---------- output ----------
 
 export type ConflictReason =
   | 'unknown_event_type'
+  | 'not_placed'
   | 'stage_required'
   | 'stage_not_found'
   | 'out_of_scope'
@@ -98,19 +101,26 @@ export interface EventResult {
   readonly eventId: string;
   readonly typeCode: string;
   readonly result: 'applied' | 'conflict';
+  /** The stage the engine placed the event on. */
+  readonly stageId?: string;
+  /** Why the phase did not change: a repeat, a phase not in the profile, ... */
+  readonly note?: string;
+  readonly cancelled?: boolean;
   readonly conflict?: Conflict;
   /** Blocking requirements passed over (acceptUnmet or forced). */
   readonly requirementsUnmet?: readonly string[];
   /** Warn-level requirements that were not met. */
   readonly warnings?: readonly string[];
-  /** Automatic changes caused by the event, e.g. "stage:s2 started". */
+  /** Phase changes caused by the event, e.g. "stage:s2 started"; "(auto)" — implied by a rule. */
   readonly effects: readonly string[];
 }
 
 export interface Pause {
   readonly from: string;
   readonly to?: string;
+  /** The stop event (e.g. repair) or a free-text reason. */
   readonly reason?: string;
+  readonly fault?: string;
   readonly incidentId?: string;
 }
 
@@ -144,7 +154,7 @@ export interface StageResult {
   /** Effective assignee (own, inherited from previous stages, or the trip driver). */
   readonly assigneeId?: string;
   readonly mode?: TransportMode;
-  /** Closed automatically, the driver did not mark it. */
+  /** Reached its final phase by a rule (a later stage got a phase), not by its own event. */
   readonly autoPassed?: boolean;
   readonly arrivedAt?: string;
   readonly startedAt?: string;

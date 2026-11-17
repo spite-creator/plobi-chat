@@ -79,13 +79,12 @@ export function document(requirementId: string): Attachment[] {
   return [{ id: `f${++fileSeq}`, kind: 'document', source: 'camera', field: 'documents', requirementId }];
 }
 
-/** All evidence a loading stage needs before departure. */
-export function completeLoadingEvidence(j: Journal, stageId: string) {
-  j.driver('photo_process', stageId, { attachments: photos(`${stageId}:loading_process_photos`, 3) });
-  j.driver('loaded', stageId);
-  j.driver('seal_set', stageId, {
-    values: { seal_number: 'SEAL-001' },
-    attachments: photos(`${stageId}:seal_photo`, 1),
+/** Points named by their type, numbered when a type repeats: route('loading', 'unloading'). */
+export function route(...types: string[]): Array<{ id: string; typeCode: string }> {
+  const seen = new Map<string, number>();
+  return types.map((typeCode) => {
+    const n = (seen.get(typeCode) ?? 0) + 1;
+    seen.set(typeCode, n);
+    return { id: n === 1 ? typeCode : `${typeCode}${n}`, typeCode };
   });
-  j.driver('docs_received', stageId, { attachments: document(`${stageId}:cmr_signed`) });
 }

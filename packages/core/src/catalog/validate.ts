@@ -40,7 +40,9 @@ export function validateCatalog(catalog: Catalog): CatalogIssue[] {
 
   for (const ev of Object.values(catalog.eventTypes)) {
     const fitting = stageTypes.filter((st) => eventFitsStageType(ev, st));
-    const stageBound = ev.action === 'phase' || ev.action === 'skip' || ev.action === 'waive';
+    // An empty list of stage types means "deliberately not bound yet" (general started / completed).
+    const unbound = ev.scope?.stageTypes?.length === 0;
+    const stageBound = !unbound && (ev.action === 'phase' || ev.action === 'skip' || ev.action === 'waive');
     if (stageBound && fitting.length === 0) {
       issues.push({ severity: 'error', code: 'event_unused', subject: ev.code, message: `${ev.code} fits no stage type` });
     }

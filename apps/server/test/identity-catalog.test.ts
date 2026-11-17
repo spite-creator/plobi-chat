@@ -61,10 +61,10 @@ describe('catalog', () => {
       scope: { stageTypes: ['loading'], phases: ['arrived'], roles: ['driver'] },
     });
     expect(add.status).toBe(200);
-    await api.post('/catalog/items/event_type/at_dock/hide', { hidden: true });
+    expect((await api.post('/catalog/items/event_type/documents_received/hide', { hidden: true })).status).toBe(200);
     const catalog = (await api.get('/catalog')).body;
     expect(catalog.eventTypes.gate_opened.code).toBe('gate_opened');
-    expect(catalog.eventTypes.at_dock).toBeUndefined();
+    expect(catalog.eventTypes.documents_received).toBeUndefined();
   });
 });
 
@@ -75,10 +75,10 @@ describe('automata', () => {
     expect(body.diagrams.profiles.point_single).toContain('started --> departed');
   });
 
-  it('maps a stage type: events and requirements on each transition', async () => {
+  it('maps a stage type: events on each transition', async () => {
     const map = (await api.get('/stage-types/loading/map')).body;
     const departure = map.transitions.find((t: any) => t.from === 'completed' && t.to === 'departed');
-    expect(departure.requirements.map((r: any) => r.code)).toContain('cmr_signed');
+    expect(departure.events.map((e: any) => e.code)).toEqual(['departed']);
     expect(map.diagram).toContain('completed --> departed: departed');
   });
 

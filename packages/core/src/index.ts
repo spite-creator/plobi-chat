@@ -10,7 +10,9 @@ export * from './machines/trip-state.js';
 
 // catalog
 export * from './catalog/types.js';
-export { BASE_CATALOG } from './catalog/base.js';
+export { BASE_CATALOG, BASE_EVENT_TYPES, STAGE_TYPES } from './catalog/base.js';
+export { EXTENDED_CATALOG } from './catalog/future.js';
+export { place, type Placed, type NotPlaced } from './engine/placement.js';
 export { validateCatalog, type CatalogIssue } from './catalog/validate.js';
 
 // engine

@@ -104,6 +104,17 @@ Plobi не подстраивается под внешнюю систему: у
 
 ## Где что смотреть
 
-- Таблицы и подвохи базы — справочник `knowledge/db/portal` в AiWorkspace.
-- Движок — `EventEngine` (SpeditionManagerApi), тесты — `EventEngineTests`.
-- Открытые задачи — [todo.md](todo.md).
+Код — в этом репозитории, TypeScript (Node).
+
+| Что | Где |
+|---|---|
+| Движок: размещение событий по этапам | `packages/core/src/engine/placement.ts` |
+| Движок: установка фаз, «всё до этапа пройдено» | `packages/core/src/engine/handlers/phase.ts` |
+| Автомат фаз, профили, состояние этапа и рейса | `packages/core/src/machines/` |
+| Базовые события и типы этапов | `packages/core/src/catalog/base.ts` |
+| Что планируется с приложением водителя | `packages/core/src/catalog/future.ts` |
+| Тесты движка | `packages/core/test/engine.test.ts`, `extended.test.ts` |
+| Сервер, API, журнал событий | `apps/server/src/modules/trips/` |
+| Таблицы | `apps/server/src/modules/*/schema.ts`, миграции — `apps/server/drizzle/` |
+
+Открытые задачи — [roadmap.md](roadmap.md).

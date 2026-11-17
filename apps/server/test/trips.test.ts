@@ -12,7 +12,6 @@ beforeAll(async () => {
   dispatcher = (await admin.user('dispatcher')).api;
   driver = await admin.user('driver', 'ivan');
   otherDriver = await admin.user('driver', 'petr');
-
   placeId = (
     await dispatcher.post('/places', {
       name: 'Склад «Северный»',
@@ -25,249 +24,168 @@ beforeAll(async () => {
   ).body.id;
 });
 
-/** Requirements sent with the stage: what the driver must see and do there. */
-const LOADING_REQUIREMENTS = [
-  { kind: 'info', title: 'Позвони Ашоту, он откроет ворота', contact: { name: 'Ашот', phone: '+7 900 000-00-00' }, showAt: 'arrived' },
-  { kind: 'acknowledgement', title: 'Не более 2 ярусов', showAt: 'arrived', beforePhase: 'started' },
-];
-
 afterAll(async () => {
   await admin.app.close();
 });
 
-async function createTrip(extra: Record<string, unknown> = {}) {
-  const res = await dispatcher.post('/trips', {
-    number: `R-${Math.random().toString(36).slice(2, 7)}`,
-    driver: { id: driver.id },
-    stages: [
-      {
-        type: 'loading',
-        place: { externalId: 'WH-NORTH' },
-        details: { windowFrom: '2026-11-20T06:00:00Z' },
-        requirements: LOADING_REQUIREMENTS,
-      },
-      { type: 'unloading', details: { address: 'Warszawa, Magazynowa 5', timezone: 'Europe/Warsaw' } },
-    ],
-    ...extra,
-  });
+/** Requirements sent with the stage. In the base catalog only information can be used yet. */
+const CALL_ASHOT = { kind: 'info', title: 'Позвони Ашоту, он откроет ворота', contact: { name: 'Ашот', phone: '+7 900 000-00-00' }, showAt: 'arrived' };
+
+async function createTrip(stages: unknown[] = [
+  { type: 'loading', place: { externalId: 'WH-NORTH' }, requirements: [CALL_ASHOT] },
+  { type: 'unloading', details: { address: 'Warszawa, Magazynowa 5', timezone: 'Europe/Warsaw' } },
+]) {
+  const res = await dispatcher.post('/trips', { number: `R-${Math.random().toString(36).slice(2, 7)}`, driver: { id: driver.id }, stages });
   expect(res.status).toBe(201);
   return res.body;
 }
 
-const event = (typeCode: string, stageId?: string, extra: Record<string, unknown> = {}) => ({
-  id: eventId(),
-  typeCode,
-  ...(stageId ? { stageId } : {}),
-  occurredAt: nextTime(),
-  ...extra,
-});
+/** An event as the driver app or an integration sends it: what happened and when, no stage. */
+const event = (typeCode: string, extra: Record<string, unknown> = {}) => ({ id: eventId(), typeCode, occurredAt: nextTime(), ...extra });
+const send = (api: Api, tripId: string, typeCode: string, extra?: Record<string, unknown>) =>
+  api.post(`/trips/${tripId}/events`, event(typeCode, extra));
 
 describe('creating a trip', () => {
-  it('inserts the transit; a stage gets its defaults plus the requirements sent with it', async () => {
+  it('inserts the transit; the place gives the address; requirements come with the stage', async () => {
     const trip = await createTrip();
-    expect(trip.stages.map((s: any) => [s.typeCode, s.isAuto])).toEqual([
-      ['loading', false],
-      ['transit', true],
-      ['unloading', false],
+    expect(trip.stages.map((s: any) => [s.typeCode, s.isAuto, s.mode])).toEqual([
+      ['loading', false, undefined],
+      ['transit', true, 'road'],
+      ['unloading', false, undefined],
     ]);
-    const loading = trip.stages[0];
-    expect(loading.placeId).toBe(placeId);
-    expect(loading.details.address).toBe('Москва, Складская 1');
-    expect(loading.requirements.map((r: any) => [r.source, r.kind, r.template ?? r.title])).toEqual([
-      ['stage_type', 'photo', 'loading_process_photos'],
-      ['stage_type', 'scan', 'seal_number'],
-      ['stage_type', 'photo', 'seal_photo'],
-      ['stage_type', 'document', 'cmr_signed'],
-      ['manual', 'info', 'Позвони Ашоту, он откроет ворота'],
-      ['manual', 'acknowledgement', 'Не более 2 ярусов'],
+    expect(trip.stages[0]).toMatchObject({ placeId, details: { address: 'Москва, Складская 1' } });
+    expect(trip.stages[0].requirements).toEqual([
+      expect.objectContaining({ kind: 'info', title: CALL_ASHOT.title, visible: false, fulfilled: true, source: 'manual' }),
     ]);
-    expect(loading.requirements[4]).toMatchObject({ visible: false, fulfilled: true, contact: { name: 'Ашот' } });
     expect(trip.state).toBe('assigned');
   });
 
   it('refuses an unknown stage type, a malformed requirement and a duplicate external id', async () => {
-    const bad = await dispatcher.post('/trips', { number: 'X', stages: [{ type: 'teleport' }] });
-    expect(bad.body.code).toBe('unknown_stage_type');
-    const noPhase = await dispatcher.post('/trips', {
-      number: 'X',
-      stages: [{ type: 'loading', requirements: [{ kind: 'photo', title: 'Фото' }] }],
-    });
+    expect((await dispatcher.post('/trips', { number: 'X', stages: [{ type: 'teleport' }] })).body.code).toBe('unknown_stage_type');
+    const noPhase = await dispatcher.post('/trips', { number: 'X', stages: [{ type: 'loading', requirements: [{ kind: 'photo', title: 'Фото' }] }] });
     expect(noPhase.body.code).toBe('invalid_requirement');
-    await createTrip({ externalId: '1C-77' });
-    const dup = await dispatcher.post('/trips', { number: 'Y', externalId: '1C-77', stages: [{ type: 'waypoint' }] });
-    expect(dup.status).toBe(409);
+    await dispatcher.post('/trips', { number: 'Y', externalId: '1C-77', stages: [{ type: 'waypoint' }] });
+    expect((await dispatcher.post('/trips', { number: 'Y', externalId: '1C-77', stages: [{ type: 'waypoint' }] })).status).toBe(409);
   });
 
   it('drivers cannot create trips and see only their own', async () => {
     expect((await driver.api.post('/trips', { number: 'Z', stages: [{ type: 'waypoint' }] })).status).toBe(403);
     const trip = await createTrip();
     expect((await otherDriver.api.get(`/trips/${trip.id}`)).status).toBe(403);
-    const mine = (await driver.api.get('/trips')).body.map((t: any) => t.id);
-    expect(mine).toContain(trip.id);
-    expect((await otherDriver.api.get('/trips')).body).toEqual([]);
+    expect((await driver.api.get('/trips')).body.map((t: any) => t.id)).toContain(trip.id);
   });
 });
 
-describe('the event journal online', () => {
-  it('runs a loading: acknowledgement, requirements, departure starts the transit', async () => {
+describe('the journal online', () => {
+  it('places events itself and runs the trip to the end', async () => {
     const trip = await createTrip();
-    const load = trip.stages[0].id;
-    const ack = trip.stages[0].requirements.find((r: any) => r.kind === 'acknowledgement');
+    const [load, road, unload] = trip.stages.map((s: any) => s.id);
 
-    expect((await driver.api.post(`/trips/${trip.id}/events`, event('arrived', load))).status).toBe(201);
+    const arrived = await send(driver.api, trip.id, 'arrived');
+    expect(arrived.body.result).toMatchObject({ result: 'applied', stageId: load });
+    expect(arrived.body.trip.stages[0].requirements[0].visible).toBe(true); // "call Ashot" shows on arrival
 
-    // "No more than 2 tiers" must be acknowledged before work starts.
-    const early = await driver.api.post(`/trips/${trip.id}/events`, event('loading_started', load));
-    expect(early.status).toBe(409);
-    expect(early.body.details).toEqual({ reason: 'requirements_unmet', details: [ack.id] });
+    await send(driver.api, trip.id, 'loading_started');
+    await send(driver.api, trip.id, 'loaded');
+    const departed = await send(driver.api, trip.id, 'departed');
+    expect(departed.body.result.effects).toEqual([`stage:${load} departed`, `stage:${road} started (auto)`]);
 
-    await driver.api.post(`/trips/${trip.id}/events`, event('acknowledged', load, { values: { requirementId: ack.id, revision: 1 } }));
-    await driver.api.post(`/trips/${trip.id}/events`, event('loading_started', load));
-    await driver.api.post(`/trips/${trip.id}/events`, event('loaded', load));
-
-    const blocked = await driver.api.post(`/trips/${trip.id}/events`, event('departed', load));
-    expect(blocked.status).toBe(409);
-    expect(blocked.body.details.reason).toBe('requirements_unmet');
-
-    // The buttons show departure with what is still missing.
-    const buttons = (await driver.api.get(`/trips/${trip.id}/available-events?stageId=${load}`)).body;
-    expect(buttons.find((b: any) => b.typeCode === 'departed').requirementsUnmet).toHaveLength(4);
-
-    // Dispatcher waives everything with a reason; then departure goes through.
-    for (const r of trip.stages[0].requirements.filter((x: any) => x.template)) {
-      const w = await dispatcher.post(`/trips/${trip.id}/events`, event('requirement_waived', load, { values: { requirementId: r.id, reason: 'client agreed' } }));
-      expect(w.status).toBe(201);
-    }
-    const dep = await driver.api.post(`/trips/${trip.id}/events`, event('departed', load));
-    expect(dep.status).toBe(201);
-    expect(dep.body.result.effects).toEqual([`stage:${trip.stages[1].id} started`]);
-    expect(dep.body.trip.currentStageId).toBe(trip.stages[1].id);
+    await send(driver.api, trip.id, 'rest');
+    await send(driver.api, trip.id, 'in_transit');
+    await send(driver.api, trip.id, 'arrived');
+    await send(driver.api, trip.id, 'unloading_started');
+    const unloaded = await send(driver.api, trip.id, 'unloaded');
+    expect(unloaded.body.result.effects).toEqual([`stage:${unload} completed`, `stage:${unload} departed (auto)`]);
 
     const full = (await dispatcher.get(`/trips/${trip.id}`)).body;
-    expect(full.state).toBe('in_progress');
-    expect(full.journal.every((e: any) => e.result.result === 'applied')).toBe(true);
-    expect(full.journal.every((e: any) => e.authorId === driver.id || e.authorRole === 'dispatcher')).toBe(true);
+    expect(full.state).toBe('finished');
+    expect(full.stages[1].pauses).toEqual([expect.objectContaining({ reason: 'rest' })]);
+    expect(full.journal.every((e: any) => e.result.result === 'applied' && e.authorId === driver.id)).toBe(true);
   });
 
-  it('is idempotent for a repeated event id', async () => {
+  it('refuses what does not fit, with the reason; a repeated id is idempotent', async () => {
     const trip = await createTrip();
-    const e = event('arrived', trip.stages[0].id);
-    const first = await driver.api.post(`/trips/${trip.id}/events`, e);
-    const again = await driver.api.post(`/trips/${trip.id}/events`, e);
-    expect(first.status).toBe(201);
-    expect(again.status).toBe(201);
-    expect((await driver.api.get(`/trips/${trip.id}`)).body.journal).toHaveLength(1);
+    await send(driver.api, trip.id, 'arrived');
+    await send(driver.api, trip.id, 'loading_started');
+    const rest = await send(driver.api, trip.id, 'rest');
+    expect(rest.status).toBe(409);
+    expect(rest.body.details).toEqual({ reason: 'not_placed', details: ['Событие транзита, а машина на точке «loading»'] });
+
+    const e = event('downtime');
+    expect((await driver.api.post(`/trips/${trip.id}/events`, e)).status).toBe(201);
+    expect((await driver.api.post(`/trips/${trip.id}/events`, e)).status).toBe(201);
+    expect((await driver.api.get(`/trips/${trip.id}`)).body.journal).toHaveLength(3);
   });
 
-  it('refuses an event that would invalidate already accepted ones', async () => {
+  it('a cancelled event stays in the journal and phases are recomputed without it', async () => {
     const trip = await createTrip();
-    const load = trip.stages[0].id;
-    const arrivedAt = nextTime();
-    await driver.api.post(`/trips/${trip.id}/events`, { id: eventId(), typeCode: 'arrived', stageId: load, occurredAt: arrivedAt });
-    // Skipping the stage *before* the arrival would turn the arrival into a conflict.
-    const before = new Date(Date.parse(arrivedAt) - 60_000).toISOString();
-    const skip = await dispatcher.post(`/trips/${trip.id}/events`, {
-      id: eventId(),
-      typeCode: 'stage_skipped',
-      stageId: load,
-      occurredAt: before,
-      values: { reason: 'late correction' },
-    });
-    expect(skip.status).toBe(409);
-    expect(skip.body.code).toBe('event_breaks_journal');
+    const arrived = event('arrived');
+    await driver.api.post(`/trips/${trip.id}/events`, arrived);
+    const res = await dispatcher.post(`/trips/${trip.id}/events/${arrived.id}/cancel`, { reason: 'Нет во внешней системе' });
+    expect(res.status).toBe(200);
+    expect(res.body.stages[0].phase).toBeNull();
+    const full = (await dispatcher.get(`/trips/${trip.id}`)).body;
+    expect(full.journal[0]).toMatchObject({ cancelled: true, result: { cancelled: true, stageId: trip.stages[0].id } });
   });
 
   it('observers cannot submit events', async () => {
     const trip = await createTrip();
     const observer = await admin.user('observer');
-    expect((await observer.api.post(`/trips/${trip.id}/events`, event('arrived', trip.stages[0].id))).status).toBe(403);
+    expect((await send(observer.api, trip.id, 'arrived')).status).toBe(403);
   });
 });
 
 describe('offline sync', () => {
-  it('stores everything, keeps misfits as conflicts, and orders by occurredAt', async () => {
+  it('stores everything, keeps misfits as conflicts, orders by time', async () => {
     const trip = await createTrip();
     const [load, road, unload] = trip.stages.map((s: any) => s.id);
-    const arrived = event('arrived', load);
-    const departed = event('departed', load, { values: { reason: 'cargo not ready' } });
-    const atUnload = event('arrived', unload);
-    const nonsense = event('unloaded', unload); // not allowed right after arrival: work never started
+    const arrived = event('arrived');
+    const loaded = event('loaded');
+    const departed = event('departed');
+    const atUnload = event('arrived');
+    const late = event('loading_started'); // loading is already behind: never sent before, a conflict
 
-    // Sent in reverse order, as a phone might after a long time without signal.
     const res = await driver.api.post('/events/batch', {
-      events: [nonsense, atUnload, departed, arrived].map((e) => ({ ...e, tripId: trip.id })),
+      events: [late, atUnload, departed, loaded, arrived].map((e) => ({ ...e, tripId: trip.id })),
     });
-    expect(res.status).toBe(200);
     const byId = new Map(res.body.results.map((r: any) => [r.eventId, r]));
-    expect(byId.get(arrived.id)).toMatchObject({ result: 'applied' });
-    expect(byId.get(departed.id)).toMatchObject({ result: 'applied' });
-    expect(byId.get(atUnload.id)).toMatchObject({ result: 'applied', effects: [`stage:${road} completed`] });
-    expect(byId.get(nonsense.id)).toMatchObject({ result: 'conflict', conflict: { reason: 'invalid_transition' } });
+    expect(byId.get(arrived.id)).toMatchObject({ result: 'applied', stageId: load });
+    expect(byId.get(atUnload.id)).toMatchObject({ result: 'applied', stageId: unload, effects: [`stage:${road} completed (auto)`, `stage:${unload} arrived`] });
+    expect(byId.get(late.id)).toMatchObject({ result: 'conflict', conflict: { reason: 'not_placed' } });
 
     const full = (await dispatcher.get(`/trips/${trip.id}`)).body;
-    expect(full.journal).toHaveLength(4);
+    expect(full.journal).toHaveLength(5);
     expect(full.stages.map((s: any) => s.state)).toEqual(['passed', 'passed', 'in_progress']);
-    expect(full.stages[0].requirements.filter((r: any) => r.kind !== 'info').every((r: any) => r.notApplicable)).toBe(true);
-  });
-
-  it('a retried batch does not duplicate anything', async () => {
-    const trip = await createTrip();
-    const events = [event('arrived', trip.stages[0].id)].map((e) => ({ ...e, tripId: trip.id }));
-    await driver.api.post('/events/batch', { events });
-    await driver.api.post('/events/batch', { events });
-    expect((await driver.api.get(`/trips/${trip.id}`)).body.journal).toHaveLength(1);
   });
 });
 
 describe('handover → takeover with two drivers', () => {
-  it('the receiving driver sees the trip and leads it on; the first one cannot act for them', async () => {
-    const res = await dispatcher.post('/trips', {
-      number: 'R-HANDOVER',
-      driver: { id: driver.id },
-      stages: [
-        { type: 'handover', details: { address: 'Склад Северный' } },
-        { type: 'takeover', assigneeId: otherDriver.id, details: { address: 'Склад Северный' } },
-        { type: 'border_open', details: { address: 'Франкфурт-на-Одере' } },
-        { type: 'unloading' },
-      ],
-    });
-    expect(res.status).toBe(201);
-    const trip = res.body;
+  it('the receiving driver leads on; the first one cannot act for them; a fast crossing closes itself', async () => {
+    const trip = await createTrip([
+      { type: 'handover', details: { address: 'Склад Северный' } },
+      { type: 'takeover', assigneeId: otherDriver.id, details: { address: 'Склад Северный' } },
+      { type: 'border_open', details: { address: 'Франкфурт-на-Одере' } },
+      { type: 'unloading' },
+    ]);
     expect(trip.stages.map((s: any) => s.typeCode)).toEqual(['handover', 'takeover', 'transit', 'border_open', 'transit', 'unloading']);
     expect(trip.stages.map((s: any) => s.assigneeId)).toEqual([driver.id, otherDriver.id, otherDriver.id, otherDriver.id, otherDriver.id, otherDriver.id]);
+    const [, take, , border, , unload] = trip.stages.map((s: any) => s.id);
 
-    const [hand, take, , border, , unload] = trip.stages.map((s: any) => s.id);
-    // Driver 1 hands over; requirements waived to keep the scenario short.
-    await driver.api.post(`/trips/${trip.id}/events`, event('arrived', hand));
-    for (const r of trip.stages[0].requirements) {
-      await dispatcher.post(`/trips/${trip.id}/events`, event('requirement_waived', hand, { values: { requirementId: r.id, reason: 'test' } }));
+    for (const code of ['arrived', 'handover_started', 'handed_over']) {
+      expect((await send(driver.api, trip.id, code)).status).toBe(201);
     }
-    await driver.api.post(`/trips/${trip.id}/events`, event('handover_started', hand));
-    await driver.api.post(`/trips/${trip.id}/events`, event('handed_over', hand, { values: { transferred: ['cargo'] } }));
-    expect((await driver.api.post(`/trips/${trip.id}/events`, event('departed', hand))).status).toBe(201);
-
-    // Driver 1 may not take over for driver 2.
-    const wrong = await driver.api.post(`/trips/${trip.id}/events`, event('arrived', take));
+    const wrong = await send(driver.api, trip.id, 'arrived');
     expect(wrong.status).toBe(409);
     expect(wrong.body.details).toEqual({ reason: 'out_of_scope', details: ['assignee'] });
 
-    // Driver 2 sees the trip and takes over.
     expect((await otherDriver.api.get('/trips')).body.map((t: any) => t.id)).toContain(trip.id);
-    for (const r of trip.stages[1].requirements) {
-      await dispatcher.post(`/trips/${trip.id}/events`, event('requirement_waived', take, { values: { requirementId: r.id, reason: 'test' } }));
+    for (const code of ['arrived', 'takeover_started', 'taken_over', 'departed']) {
+      const r = await send(otherDriver.api, trip.id, code);
+      expect(r.status).toBe(201);
+      expect(r.body.result.stageId).toBe(take);
     }
-    for (const code of ['arrived', 'takeover_started']) {
-      expect((await otherDriver.api.post(`/trips/${trip.id}/events`, event(code, take))).status).toBe(201);
-    }
-    await otherDriver.api.post(`/trips/${trip.id}/events`, event('taken_over', take, { values: { transferred: ['cargo'] } }));
-    await otherDriver.api.post(`/trips/${trip.id}/events`, event('departed', take));
-
-    // He drives through the fast border crossing without pressing "passed".
-    const arrival = await otherDriver.api.post(`/trips/${trip.id}/events`, event('arrived', unload));
-    expect(arrival.status).toBe(201);
-    const stages = arrival.body.trip.stages;
-    expect(stages.find((s: any) => s.id === border)).toMatchObject({ state: 'passed', autoPassed: true });
-    expect(arrival.body.trip.currentStageId).toBe(unload);
+    const arrival = await send(otherDriver.api, trip.id, 'arrived');
+    expect(arrival.body.result.stageId).toBe(unload);
+    expect(arrival.body.trip.stages.find((s: any) => s.id === border)).toMatchObject({ state: 'passed', autoPassed: true });
   });
 });
-

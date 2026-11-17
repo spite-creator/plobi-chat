@@ -22,6 +22,9 @@ export interface HandlerContext {
 
 export interface Accepted {
   readonly ok: true;
+  /** The stage the event was placed on. */
+  readonly stageId?: string;
+  readonly note?: string;
   readonly requirementsUnmet?: readonly string[];
   readonly warnings?: readonly string[];
   /** Applies the event and returns the automatic effects it caused. */

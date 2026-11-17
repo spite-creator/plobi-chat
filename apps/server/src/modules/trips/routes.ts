@@ -93,6 +93,19 @@ export function tripRoutes(service: TripService): FastifyPluginAsyncTypebox {
       return reply.status(201).send({ result, trip });
     });
 
+    /** Cancel an event: it stays in the journal for display, phases are recomputed without it. */
+    app.post(
+      '/trips/:id/events/:eventId/cancel',
+      {
+        schema: {
+          tags: ['events'],
+          params: Type.Object({ id: Type.String({ format: 'uuid' }), eventId: Type.String() }),
+          body: Type.Object({ reason: Type.String({ minLength: 1 }) }),
+        },
+      },
+      async (req) => service.cancelEvent(req.params.id, req.params.eventId, req.body.reason, currentUser(req)),
+    );
+
     /** Offline queue: everything is stored; events that no longer fit are kept as conflicts. */
     app.post(
       '/events/batch',

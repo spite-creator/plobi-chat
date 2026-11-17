@@ -25,7 +25,7 @@ export const detailHandler: Handler = (ctx) => {
   const fields = checkFields(ctx);
   if (fields) return fields;
 
-  return { ok: true, apply: () => [] };
+  return { ok: true, ...(stage ? { stageId: stage.input.id } : {}), apply: () => [] };
 };
 
 /** Dispatcher skips a stage from any state. An automatic transit right after a skipped point is skipped too. */
@@ -43,6 +43,7 @@ export const skipHandler: Handler = (ctx) => {
 
   return {
     ok: true,
+    stageId: stage.input.id,
     apply: () => {
       skipStage(stage, ctx.at);
       const next = ctx.run.stages[stage.index + 1];
@@ -76,6 +77,7 @@ export const waiveHandler: Handler = (ctx) => {
 
   return {
     ok: true,
+    stageId: stage.input.id,
     apply: () => {
       if (requirement) requirement.waived = true;
       return [];

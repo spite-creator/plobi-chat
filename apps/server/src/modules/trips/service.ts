@@ -17,7 +17,7 @@ import {
   type TripInput,
   type TripResult,
 } from '@plobi/core';
-import { asc, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
 import type { Db, Tx } from '../../platform/db.js';
 import { conflict, notFound } from '../../platform/errors.js';
 import type { EventBus } from '../../platform/event-bus.js';
@@ -134,6 +134,7 @@ const toEventInput = (e: EventRow): EventInput => ({
   attachments: e.attachments,
   forced: e.forced,
   acceptUnmet: e.acceptUnmet,
+  ...(e.cancelledAt ? { cancelled: true } : {}),
 });
 
 const participants = (l: Pick<Loaded, 'trip' | 'stages'>) => ({
@@ -325,6 +326,27 @@ export class TripService {
     return results;
   }
 
+  /**
+   * Cancels an event: it stays in the journal, is still placed for display,
+   * and phases are recomputed without it.
+   */
+  async cancelEvent(tripId: string, eventId: string, reason: string, user: AuthUser): Promise<TripView> {
+    const catalog = await this.catalog.get();
+    const loaded = await this.db.transaction(async (tx) => {
+      const current = await this.load(tx, tripId, { lock: true });
+      assertCanSubmit(user, participants(current));
+      const updated = await tx
+        .update(tripEvents)
+        .set({ cancelledAt: new Date().toISOString(), cancelledBy: user.id, cancelReason: reason })
+        .where(and(eq(tripEvents.id, eventId), eq(tripEvents.tripId, tripId), isNull(tripEvents.cancelledAt)))
+        .returning({ id: tripEvents.id });
+      if (updated.length === 0) throw notFound('Active event', eventId);
+      return this.load(tx, tripId);
+    });
+    await this.bus.publish('trip.events_applied', { tripId, eventIds: [eventId] });
+    return this.view(loaded, catalog);
+  }
+
   // ---------- internals ----------
 
   private newEventRow(tripId: string, e: SubmittedEvent, user: AuthUser): EventRow {
@@ -342,6 +364,9 @@ export class TripService {
       attachments: e.attachments ?? [],
       forced: e.forced ?? false,
       acceptUnmet: e.acceptUnmet ?? false,
+      cancelledAt: null,
+      cancelledBy: null,
+      cancelReason: null,
       source: 'app',
     };
   }

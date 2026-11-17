@@ -77,6 +77,9 @@ CREATE TABLE "trip_events" (
 	"values" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"attachments" jsonb DEFAULT '[]'::jsonb NOT NULL,
 	"forced" boolean DEFAULT false NOT NULL,
+	"cancelled_at" timestamp with time zone,
+	"cancelled_by" uuid,
+	"cancel_reason" text,
 	"accept_unmet" boolean DEFAULT false NOT NULL,
 	"source" text DEFAULT 'app' NOT NULL
 );
